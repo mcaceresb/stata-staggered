@@ -1,0 +1,17 @@
+v 0.2.0
+d
+d 'STAGGERED': Staggered
+d
+d KW: staggered
+d KW: did
+d KW: diff-in-diff
+d KW: event study
+d
+d Requires: Stata version 14.1
+d
+d Distribution-Date: 20230209
+d
+f src/build/lstaggered.mlib
+f src/ado/staggered.ado
+f doc/staggered.sthlp
+f src/mata/staggered.mata
