@@ -135,6 +135,10 @@ void function Staggered::estimate()
     else if ( this.estimand == "eventstudy" ){
         this.compute_Ag_eventstudy()
     }
+    else {
+        errprintf("no valid estimand provided: \n", this.estimand)
+        _error(198)
+    }
     this.compute_estimand()
 
     // can be inside compute_fisher

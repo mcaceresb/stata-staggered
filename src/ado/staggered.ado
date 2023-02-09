@@ -1,4 +1,4 @@
-*! version 0.2.0 09Feb2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
+*! version 0.2.1 09Feb2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
 *! staggered R to Stata translation
 
 capture program drop staggered
@@ -51,7 +51,7 @@ program staggered, eclass
 
     local options `options' eventTime num_fisher_permutations estimand
     foreach opt of local options {
-        local StagOpt_`opt': copy local opt
+        local StagOpt_`opt': copy local `opt'
     }
 
     local y: copy local varlist
