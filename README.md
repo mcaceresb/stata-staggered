@@ -3,7 +3,7 @@ Staggered
 
 The `staggered` package implements xx
 
-`version 0.2.1 09Feb2023` | [Background](#background) | [Installation](#installation) | [Examples](#examples)
+`version 0.3.0 13Feb2023` | [Background](#background) | [Installation](#installation) | [Examples](#examples)
 
 ## Background
 
@@ -37,6 +37,13 @@ staggered, vce(conservative)
 staggered complaints, i(uid) t(period) g(first_trained) estimand(cohort)
 mata (`e(mata)'.se_conservative, `e(mata)'.se_adjusted)
 
-staggered complaints, i(uid) t(period) g(first_trained) estimand(calendar)
+staggered complaints, i(uid) t(period) g(first_trained) estimand(calendar) num_fisher(100)
 mata (`e(mata)'.se_conservative, `e(mata)'.se_adjusted)
+mata (`e(mata)'.fisher_conservative, `e(mata)'.fisher_adjusted)
+
+staggered complaints, i(uid) t(period) g(first_trained) estimand(eventstudy)
+staggered complaints, i(uid) t(period) g(first_trained) estimand(eventstudy) eventTime(0/23)
+matrix eventPlotResults = e(thetastar), e(se_adjusted), e(se_conservative)
+matrix colnames eventPlotResults = estimate se se_neyman
+matrix list eventPlotResults
 ```

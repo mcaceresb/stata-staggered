@@ -1,4 +1,4 @@
-*! version 0.2.1 09Feb2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
+*! version 0.3.0 13Feb2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
 *! staggered R to Stata translation
 
 capture program drop staggered
@@ -9,21 +9,18 @@ program staggered, eclass
         exit 0
     }
 
-    local options skip_data_check         /// xx not yet coded
-                  return_full_vcv         /// xx not yet coded
-                  use_last_treated_only   /// xx not yet coded
-                  compute_fisher          /// xx not yet coded
-
     local 0bak: copy local 0
     syntax varname(numeric)                 /// depvar
            [if] [in],                       /// subset, weights
            i(varname) t(varname) g(varname) ///
-           estimand(str)                    /// estimand: simple, xx
+           estimand(str)                    /// estimand: simple, cohort, calendar, eventstudy
     [                                       ///
            vce(str)                         /// SEs to be displayed
            MATAsave(str)                    /// save resulting mata object
-           eventTime(numlist)               /// xx not yet coded
-           num_fisher_permutations(int 500) /// xx not yet coded
+           eventTime(numlist)               /// event study times (default 0 with estimand eventstudy)
+           num_fisher(int 0)                /// fisher permutations (if > 0)
+           skip_data_check                  /// do not check if data balanced
+           use_last_treated_only            /// xx not yet coded
            `options'                        ///
     ]
 
@@ -41,15 +38,12 @@ program staggered, eclass
         exit 198
     }
 
-    if inlist("`estimand'", "eventstudy") {
-        disp as err "estimand 'eventstudy' not yet implemented; xx rawwwr"
-    }
-
+    local options use_last_treated_only
     foreach opt of local options {
         if "``opt''" != "" disp as err "warning: option `opt' not yet implemented; xx rawwwr"
     }
 
-    local options `options' eventTime num_fisher_permutations estimand
+    local options skip_data_check eventTime num_fisher estimand
     foreach opt of local options {
         local StagOpt_`opt': copy local `opt'
     }
@@ -65,7 +59,6 @@ program staggered, eclass
     mata `Staggered'.estimate()
     mata `Staggered'.clear()
 
-    * TODO: xx make results table
     Display `Staggered', vce(`vce') touse(`touse')
     mata st_local("cmdline", "staggered " + st_local("0bak"))
     ereturn local cmdline: copy local cmdline
@@ -104,6 +97,7 @@ program Display, eclass
     else {
         ereturn post `b' `V', esample(`touse') obs(`N')
     }
+    mata `namelist'.events()
     ereturn local vcetype = proper("`vce'")
     ereturn local vce `vce'
     _coef_table, noempty `options'

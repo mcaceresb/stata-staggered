@@ -20,35 +20,37 @@ class Staggered
     string scalar  varlist
     string scalar  touse
     real scalar    N
+    real scalar    Ni
     real scalar    Nt
     real scalar    Ng
     real scalar    preperiods
+    real scalar    multievent
+    real scalar    anyfisher
 
     // options
     real scalar    skip_data_check
     real vector    eventTime
-    real scalar    num_fisher_permutations
-    real scalar    return_full_vcv
+    real scalar    num_fisher
     real scalar    use_last_treated_only
-    real scalar    compute_fisher
     string scalar  estimand
-                   
-    // results     
+
+    // results
     real matrix    A_theta
     real matrix    A_0
-    real scalar    betastar
-    real scalar    thetastar
-    real scalar    betahat
-    real scalar    thetahat0
-    real scalar    V_X
-    real scalar    V_thetaX
-    real scalar    V_theta
-    real scalar    Xhat
-    real scalar    adjustmentFactor
-    real scalar    var_conservative
-    real scalar    se_conservative 
-    real scalar    var_adjusted    
-    real scalar    se_adjusted     
+    real colvector betastar
+    real colvector thetastar
+    real colvector thetahat0
+    real colvector V_X
+    real colvector V_thetaX
+    real colvector V_theta
+    real colvector Xhat
+    real colvector adjustmentFactor
+    real colvector var_conservative
+    real colvector se_conservative
+    real colvector var_adjusted
+    real colvector se_adjusted
+    real colvector fisher_adjusted    
+    real colvector fisher_conservative
 
     // functions
     void new()
@@ -57,7 +59,9 @@ class Staggered
     void check_caller()
     void update_selection()
     void post()
+    void events()
     void estimate()
+    void permute_cohort()
 
     void setup_encode_i()
     void setup_balance_df()
@@ -69,6 +73,7 @@ class Staggered
     void compute_Ag_calendar()
     void compute_Ag_eventstudy()
     void compute_estimand()
+    void compute_fisher()
 }
 
 class Staggered scalar function StaggeredNew(string scalar _varlist, string scalar _touse)
@@ -81,13 +86,11 @@ class Staggered scalar function StaggeredNew(string scalar _varlist, string scal
 void function Staggered::new()
 {
     this.clear()
-    this.skip_data_check         = (st_local("StagOpt_skip_data_check")         != "")
-    this.eventTime               = strtoreal(tokens(st_local("StagOpt_eventTime")))
-    this.num_fisher_permutations = strtoreal(st_local("StagOpt_num_fisher_permutations"))
-    this.return_full_vcv         = (st_local("StagOpt_return_full_vcv")         != "")
-    this.use_last_treated_only   = (st_local("StagOpt_use_last_treated_only")   != "")
-    this.compute_fisher          = (st_local("StagOpt_compute_fisher")          != "")
-    this.estimand                = st_local("StagOpt_estimand")
+    this.skip_data_check       = (st_local("StagOpt_skip_data_check")         != "")
+    this.eventTime             = strtoreal(tokens(st_local("StagOpt_eventTime")))
+    this.num_fisher            = strtoreal(st_local("StagOpt_num_fisher"))
+    this.use_last_treated_only = (st_local("StagOpt_use_last_treated_only")   != "")
+    this.estimand              = st_local("StagOpt_estimand")
 }
 
 void function Staggered::clear()
@@ -116,97 +119,79 @@ void function Staggered::init(string vector _varlist, string scalar _touse)
     this.setup_balance_df(vars[2], vars[3]) // reads t, g
     this.setup_flag_singletons()
     this.y = st_data(., vars[4], this.touse)[this.index]
-
-    if ( length(this.eventTime) > 1 ) this.setup_eventstudy()
+    this.multievent = length(this.eventTime) > 1
+    this.anyfisher  = this.num_fisher>0
 }
 
 void function Staggered::estimate()
 {
+    real scalar event
+
+    // Initialize all the outcome vectors; they're vectors in case the
+    // user requests multiple events with estimand eventtime; otherwise
+    // they're a single scalar
+
+    this.V_X                 = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.V_theta             = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.V_thetaX            = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.Xhat                = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.adjustmentFactor    = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.betastar            = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.se_adjusted         = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.se_conservative     = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.thetahat0           = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.thetastar           = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.var_adjusted        = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.var_conservative    = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.fisher_adjusted     = J(max((length(this.eventTime)\1)), 1, .)
+    this.fisher_conservative = J(max((length(this.eventTime)\1)), 1, .)
+
     // If estimand is provided, calculate the appropriate A_theta_list
-    if ( this.estimand == "simple" ){
-        this.compute_Ag_simple()
-    }
-    else if ( this.estimand == "cohort" ){
-        this.compute_Ag_cohort()
-    }
-    else if ( this.estimand == "calendar" ){
-        this.compute_Ag_calendar()
-    }
-    else if ( this.estimand == "eventstudy" ){
-        this.compute_Ag_eventstudy()
+    if ( this.estimand == "eventstudy" ) {
+        if ( length(this.eventTime) ) {
+            this.setup_eventstudy()
+        }
+        else {
+            this.eventTime = 0
+        }
+        for(event = length(this.eventTime); event >= 1; event--) {
+            this.compute_Ag_eventstudy(this.eventTime[event])
+            this.compute_estimand(event)
+            this.compute_fisher(event)
+        }
     }
     else {
-        errprintf("no valid estimand provided: \n", this.estimand)
-        _error(198)
+        if ( this.estimand == "simple" ) {
+            this.compute_Ag_simple()
+        }
+        else if ( this.estimand == "cohort" ) {
+            this.compute_Ag_cohort()
+        }
+        else if ( this.estimand == "calendar" ) {
+            this.compute_Ag_calendar()
+        }
+        else {
+            errprintf("no valid estimand provided: \n", this.estimand)
+            _error(198)
+        }
+        this.compute_estimand()
+        this.compute_fisher()
     }
-    this.compute_estimand()
 
-    // can be inside compute_fisher
-    // Do FRT, if specified
-    // xx permuteTreatment <- function(df,i_g_table, seed) {
-    // xx     // This function takes a data.frame with columns i and g, and permutes the values of g assigned to i
-    // xx     // The input i_g_table has the unique combinations of (i,g) in df, and is calculated outside for speed improvements
-    // xx
-    // xx     // Draw a random permutation of the elements of first_period_df
-    // xx     set.seed(seed)
-    // xx     n = NROW(i_g_table)
-    // xx     randIndex <-
-    // xx     sample.int(n = n,
-    // xx     size = n,
-    // xx     replace = F)
-    // xx
-    // xx     // Replace first_period_df$g with a permuted version based on randIndex
-    // xx     i_g_table$g <- i_g_table$g[randIndex]
-    // xx
-    // xx     // Merge the new treatment assignments back with the original
-    // xx     df$g <- NULL
-    // xx     df <- dplyr::left_join(df,
-    // xx     i_g_table,
-    // xx     by = c("i"))
-    // xx     return(df)
-    // xx }
-
-    // xx if(compute_fisher){
-    // xx
-    // xx   #Find unique pairs of (i,g). This will be used for computing the permutations
-    // xx   # i_g_table <- df %>%
-    // xx   #              dplyr::filter(t == min(t)) %>%
-    // xx   #              dplyr::select(i,g)
-    // xx
-    // xx   i_g_table <- df %>%
-    // xx     dplyr::filter(t == min(t))
-    // xx   i_g_table <- i_g_table[,c("i","g")]
-    // xx
-    // xx   #Now, we compute the FRT for each seed, permuting treatment for each one
-    // xx     #We catch any errors in the FRT simulations, and throw a warning if at least one has an error (using the remaining draws to calculate frt)
-    // xx   FRTResults <-
-    // xx     purrr::map(.x = 1:num_fisher_permutations,
-    // xx                .f = purrr::possibly(
-    // xx                  .f =~ staggered::staggered(df = permuteTreatment(df, i_g_table, seed = .x),
-    // xx                                             estimand = NULL,
-    // xx                                             beta = user_input_beta,
-    // xx                                             A_theta_list = A_theta_list,
-    // xx                                             A_0_list = A_0_list,
-    // xx                                             eventTime = eventTime,
-    // xx                                             return_full_vcv = F,
-    // xx                                             return_matrix_list = F,
-    // xx                                             compute_fisher = F,
-    // xx                                             skip_data_check = T) %>% mutate(seed = .x),
-    // xx                  otherwise = NULL)
-    // xx     ) %>%
-    // xx     purrr::discard(base::is.null) %>%
-    // xx     purrr::reduce(.f = dplyr::bind_rows)
-    // xx
-    // xx   successful_frt_draws <- NROW(FRTResults)
-    // xx   if(successful_frt_draws < num_fisher_permutations){
-    // xx     warning("There was an error in at least one of the FRT simulations. Removing the problematic draws.")
-    // xx   }
-    // xx
-    // xx   resultsDF$fisher_pval <- mean( abs(resultsDF$estimate/resultsDF$se) < abs(FRTResults$estimate/FRTResults$se) )
-    // xx   resultsDF$fisher_pval_se_neyman <- mean( abs(resultsDF$estimate/resultsDF$se_neyman) < abs(FRTResults$estimate/FRTResults$se_neyman) )
-    // xx   resultsDF$num_fisher_permutations <- successful_frt_draws
-    // xx
-    // xx }
+    if ( this.anyfisher ) {
+        this.V_X              = this.V_X             [1::(length(this.V_X             )-1)]
+        this.V_theta          = this.V_theta         [1::(length(this.V_theta         )-1)]
+        this.V_thetaX         = this.V_thetaX        [1::(length(this.V_thetaX        )-1)]
+        this.Xhat             = this.Xhat            [1::(length(this.Xhat            )-1)]
+        this.adjustmentFactor = this.adjustmentFactor[1::(length(this.adjustmentFactor)-1)]
+        this.betastar         = this.betastar        [1::(length(this.betastar        )-1)]
+        this.se_adjusted      = this.se_adjusted     [1::(length(this.se_adjusted     )-1)]
+        this.se_conservative  = this.se_conservative [1::(length(this.se_conservative )-1)]
+        this.thetahat0        = this.thetahat0       [1::(length(this.thetahat0       )-1)]
+        this.thetastar        = this.thetastar       [1::(length(this.thetastar       )-1)]
+        this.var_adjusted     = this.var_adjusted    [1::(length(this.var_adjusted    )-1)]
+        this.var_conservative = this.var_conservative[1::(length(this.var_conservative)-1)]
+    }
 }
 
 void function Staggered::check_caller()
@@ -236,7 +221,8 @@ void function Staggered::setup_encode_i(string scalar var)
     }
     this.i = J(this.N, 1, 0)
     this.i[this.info[., 1]] = J(rows(this.info), 1, 1)
-    this.i = runningsum(this.i)
+    this.Ni = rows(this.info)
+    this.i  = runningsum(this.i)
     this.sel = J(this.N, 1, 1)
 }
 
@@ -347,6 +333,7 @@ void function Staggered::update_selection()
         if ( this.y     != .  ) this.y     = this.y[keep]
         if ( this.index != .  ) this.index = this.index[keep]
         if ( this.info  != .  ) this.info  = panelsetup(this.i, 1)
+        if ( this.info  != .  ) this.Ni    = rows(this.info)
         if ( this.g     != .  ) {
             this.g           = this.g[keep]
             this.cohort_info = panelsetup(this.g, 1)
@@ -389,7 +376,7 @@ void function Staggered::compute_Ag_simple()
     // - For a given g, t
     //     - Generate a vector
     //     - 1 in the gth row
-    //     - (-N_g' / (sum_g' N_g')) in the rows g': g' > t 
+    //     - (-N_g' / (sum_g' N_g')) in the rows g': g' > t
     //     - g' are control cohorts, which are not-yet-treated and never-treated cohorts
     //     - scale the vector by N_g
     //
@@ -463,6 +450,7 @@ void function Staggered::compute_Ag_cohort()
     this.preperiods = sum(t_all :< min(g_all))
 
     // A_theta; scaling changes a decent amount but overall similar
+    // TODO: xx explain loop and mapping to weighting here
     g_scale = J(this.Ng, 1, 1)
     for(i = 1; i <= length(g_list); i++) {
         g_scale[g_sel[i]] = sum(t_list :>= g_list[i])
@@ -523,6 +511,7 @@ void function Staggered::compute_Ag_calendar()
     this.preperiods = sum(t_all :< min(g_all))
 
     // A_theta; scaling changes a decent amount but overall similar
+    // TODO: xx explain loop and mapping to weighting here
     this.A_theta = J(this.Ng, this.Nt, 0)
     Ng_control = sum(this.cohort_size) :- runningsum(this.cohort_size)
     for(i = 1; i <= length(t_list); i++) {
@@ -534,7 +523,8 @@ void function Staggered::compute_Ag_calendar()
     }
     this.A_theta = this.A_theta :/ length(t_list)
 
-    // A_0; scaling changes a decent amount but overall similar
+    // A_0; same idea but  scaling changes a _lot_, actually
+    // TODO: xx explain loop and mapping to weighting here
     this.A_0 = J(this.Ng, this.Nt, 0)
     A_0_w    = J(this.Nt, this.Nt, 0)
     g_map    = J(1,       this.Ng, 0)
@@ -557,16 +547,75 @@ void function Staggered::compute_Ag_calendar()
     this.A_0 = this.A_0 :/ length(t_list)
 }
 
-void function Staggered::compute_Ag_eventstudy()
+void function Staggered::compute_Ag_eventstudy(real scalar event)
 {
-    errprintf("compute_Ag_eventstudy() not yet implemented; xx rawwwr\n")
-    _error(198)
+    real colvector g_all,  t_all
+    real colvector g_sel,  t_sel
+    real colvector g_list, t_list
+    real colvector i_sel, i_inv, Ng_control
+
+    real scalar i, g_map, x_map, N_total
+    real matrix A_0_w
+    g_all  = this.g[cohort_info[., 1]]
+    t_all  = this.t[1::this.Nt]
+    g_sel  = selectindex(((g_all :+ event) :< max(g_all)) :& ((g_all :+ event) :<= max(t_all)))
+    if( length(g_sel) == 0 ){
+        errprintf("There are no comparison cohorts for the given eventTime (%g)\n", event)
+        _error(198)
+    }
+
+    g_list = g_all[g_sel]
+    t_list = g_list :+ event
+    this.preperiods = sum(t_all :< min(g_all))
+
+    t_sel = J(1, length(t_list), 0)
+    x_map = J(1, length(t_list), 0)
+    for(i = 1; i <= length(t_list); i++) {
+        t_sel[i] = selectindex(t_all :== t_list[i])
+        x_map[i] = selectindex((g_all :+ event) :== t_list[i])
+    }
+
+    // A_theta
+    // TODO: xx explain loop and mapping to weighting here
+    N_total = sum(this.cohort_size[g_sel])
+    this.A_theta = J(this.Ng, this.Nt, 0)
+    Ng_control = sum(this.cohort_size) :- runningsum(this.cohort_size)
+    for(i = 1; i <= length(t_list); i++) {
+        i_sel   = selectindex(g_all :>  t_list[i])
+        i_inv   = selectindex(g_all :<= g_list[i])
+        this.A_theta[i_sel, t_sel[i]] = - this.cohort_size[x_map[i]] :* this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]
+        this.A_theta[i_inv[length(i_inv)], t_sel[i]] = this.cohort_size[x_map[i]]
+    }
+    this.A_theta = this.A_theta :/ N_total
+
+    // A_0
+    // TODO: xx explain loop and mapping to weighting here
+    this.A_0 = J(this.Ng, this.Nt, 0)
+    A_0_w    = J(this.Nt, this.Nt, 0)
+    for(i = 1; i <= length(g_list); i++) {
+        g_map = selectindex(t_all :== (g_list[i]-1))
+        i_sel = selectindex(t_all :== (g_list[i]+event))
+        A_0_w[i_sel, g_map] = this.cohort_size[x_map[i]]
+    }
+    for(i = 1; i <= length(t_list); i++) {
+        i_sel = selectindex(g_all :> t_list[i])
+        this.A_0[i_sel, t_sel[i]] = this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]
+    }
+    this.A_0 = - this.A_0 * A_0_w
+    for(i = 1; i <= length(g_list); i++) {
+        g_map = selectindex(t_all :== (g_list[i]-1))
+        i_inv = selectindex(g_all :<= g_list[i])
+        this.A_0[i_inv[length(i_inv)], g_map] = this.cohort_size[x_map[i]]
+    }
+    this.A_0 = this.A_0 :/ N_total
 }
 
-void function Staggered::compute_estimand()
+void function Staggered::compute_estimand(|real scalar index)
 {
+    if ( args() < 1 ) index = 1
+
     real scalar i
-    real colvector preindex
+    real colvector preindex, betahat
     real rowvector Y_sum, A0_g, At_g
     real matrix Y_g, S_g, S_preperiod
 
@@ -579,14 +628,14 @@ void function Staggered::compute_estimand()
     // - S_\theta is defined but I haven't invested time into parsing it out;
     //   I also got it from the code and I'm 90% sure it's the adjustmentFactor
 
-    preindex    = 1::this.preperiods
-    V_X         = 0
-    V_thetaX    = 0
-    V_theta     = 0
-    thetahat0   = 0
-    Xhat        = 0
-    betahat     = J(this.preperiods, 1, 0)
-    S_preperiod = J(this.preperiods, this.preperiods, 0)
+    preindex              = 1::this.preperiods
+    this.V_X[index]       = 0
+    this.V_thetaX[index]  = 0
+    this.V_theta[index]   = 0
+    this.thetahat0[index] = 0
+    this.Xhat[index]      = 0
+    betahat               = J(this.preperiods, 1, 0)
+    S_preperiod           = J(this.preperiods, this.preperiods, 0)
     for(i = 1; i <= this.Ng; i++) {
 
         Y_g   = colshape(panelsubmatrix(this.y, i, this.cohort_info), this.Nt)
@@ -595,50 +644,154 @@ void function Staggered::compute_estimand()
         A0_g  = this.A_0[i, .]
         At_g  = this.A_theta[i, .]
 
-        this.V_X       = this.V_X       + (A0_g * S_g * A0_g') / this.cohort_size[i]
-        this.V_thetaX  = this.V_thetaX  + (A0_g * S_g * At_g') / this.cohort_size[i]
-        this.V_theta   = this.V_theta   + (At_g * S_g * At_g') / this.cohort_size[i]
-        this.thetahat0 = this.thetahat0 + Y_sum * At_g' / this.cohort_size[i]
-        this.Xhat      = this.Xhat      + Y_sum * A0_g' / this.cohort_size[i]
-        this.betahat   = this.betahat  :+ pinv(S_g[preindex, preindex]) * S_g[preindex, .] * At_g'
+        this.V_X[index]      = this.V_X[index]          + (A0_g * S_g * A0_g') / this.cohort_size[i]
+        this.V_thetaX[index] = this.V_thetaX[index]     + (A0_g * S_g * At_g') / this.cohort_size[i]
+        this.V_theta[index]  = this.V_theta[index]      + (At_g * S_g * At_g') / this.cohort_size[i]
+        this.thetahat0[index]= this.thetahat0[index]    + Y_sum * At_g' / this.cohort_size[i]
+        this.Xhat[index]     = this.Xhat[index]         + Y_sum * A0_g' / this.cohort_size[i]
 
+        betahat     = betahat :+ pinv(S_g[preindex, preindex]) * S_g[preindex, .] * At_g'
         S_preperiod = S_preperiod + S_g[preindex, preindex]
     }
-    this.adjustmentFactor = (this.betahat' * (S_preperiod / this.Ng) * this.betahat) / sum(this.cohort_size)
-    this.betastar         = this.V_thetaX / this.V_X
-    this.thetastar        = this.thetahat0 - this.Xhat * this.betastar
-    this.var_conservative = this.V_theta - this.V_thetaX * this.betastar
-    this.se_conservative  = this.var_conservative > 0? sqrt(this.var_conservative): 0
-    this.var_adjusted     = this.var_conservative - this.adjustmentFactor
-    this.se_adjusted      = this.var_adjusted > 0? sqrt(this.var_adjusted): 0
+    this.adjustmentFactor[index] = (betahat' * (S_preperiod / this.Ng) * betahat) / sum(this.cohort_size)
+    this.betastar[index]         = this.V_thetaX[index] / this.V_X[index]
+    this.thetastar[index]        = this.thetahat0[index] - this.Xhat[index] * this.betastar[index]
+    this.var_conservative[index] = this.V_theta[index] - this.V_thetaX[index] * this.betastar[index]
+    this.se_conservative[index]  = this.var_conservative[index] > 0? sqrt(this.var_conservative[index]): 0
+    this.var_adjusted[index]     = this.var_conservative[index] - this.adjustmentFactor[index]
+    this.se_adjusted[index]      = this.var_adjusted[index] > 0? sqrt(this.var_adjusted[index]): 0
 
-    if ( any((this.var_conservative, this.var_adjusted) :< 0) ) {
+    if ( any((this.var_conservative[index], this.var_adjusted[index]) :< 0) ) {
         errprintf("Calculated variance is less than 0. Setting SE to 0.\n")
     }
+}
+
+// Randomly permute the treatmnet timing (cohort) at the individual level
+// at each iteration and record the estimand and se (for t-stat)
+//
+// Note permuting the cohorts at the individual level means the cohort
+// sizes, etc. remain the same. Since the panel is forced to be balanced,
+// the only thing that changes is the outcome; in other words, Y_it
+// is permuted, but everything else is static.
+void function Staggered::compute_fisher(|real scalar index)
+{
+    if ( args() < 1 ) index = 1
+
+    real scalar dummy
+    real colvector _thetastar
+    real colvector _se_adjusted
+    real colvector _se_conservative
+
+    if ( !this.anyfisher ) return
+
+    dummy = length(this.thetastar)
+
+    _thetastar       = J(num_fisher, 1, .)
+    _se_adjusted     = J(num_fisher, 1, .)
+    _se_conservative = J(num_fisher, 1, .)
+    for(i = 1; i <= num_fisher; i++) {
+        this.permute_cohort(i)
+        this.compute_estimand(dummy)
+        _thetastar[i]       = this.thetastar[dummy]
+        _se_adjusted[i]     = this.se_adjusted[dummy]
+        _se_conservative[i] = this.se_conservative[dummy]
+    }
+
+    fisher_adjusted[index]     = mean(abs(this.thetastar[index] / this.se_adjusted[index])     :< abs(_thetastar :/ _se_adjusted))
+    fisher_conservative[index] = mean(abs(this.thetastar[index] / this.se_conservative[index]) :< abs(_thetastar :/ _se_conservative))
+}
+
+// Shuffle outcome y; note it's the only thing we need to shuffle
+// and we don't need to unshuffle it even though it becomes out of
+// sync with i because:
+// - This is the last thing we run
+// - The panel is balanced so re-shuffling without unshuffling
+//   should be conceptually equivalent (even if not identical)
+void function Staggered::permute_cohort(real scalar seed)
+{
+    real scalar i, Ni, fr, to, rseedcache
+    real matrix info
+    real colvector shuffle
+
+    rseedcache = rseed()
+    rseed(seed)
+
+    info    = jumble(this.info)
+    shuffle = J(this.N, 1, .)
+    fr      = 1
+    to      = 0
+    for(i = 1; i <= this.Ni; i++) {
+        to = to + this.Nt
+        shuffle[|fr\to|] = info[i, 1]::info[i, 2]
+        fr = fr + this.Nt
+    }
+
+    this.y = this.y[shuffle]
+    rseed(rseedcache)
 }
 
 // If eventTime is a vector, call staggered for each event-time and combine the results
 void function Staggered::setup_eventstudy()
 {
+    // So the idea here is to just look over all the event times and return
+    // all the coefficients and SEs. I do that in the computation step;
+    // nothing really to do here, but leave function as is just in case.
     if ( this.estimand != "eventstudy" ) {
-        errprintf("You provided a vector fpr eventTime but estimand is not set to\n")
+        errprintf("You provided a vector for eventTime but estimand is not set to\n")
         errprintf("'eventstudy'. Did you mean to set estimand = 'eventstudy'?\n")
         _error(198)
     }
 }
 
-void function Staggered::post(string scalar b, string scalar V,| string scalar vce)
+void function Staggered::post(string scalar b, string scalar V,| string scalar vce, real scalar index)
 {
+
     if ( args() < 3 ) vce = "adjusted"
+    if ( args() < 4 ) index = 1
+
     string vector rownames, eqnames
     eqnames  = ""
     rownames = tokens(this.varlist)[3]
-    st_matrix(b, this.thetastar)
+    st_matrix(b, this.thetastar[index])
     st_matrixcolstripe(b, (eqnames, rownames))
     st_matrixrowstripe(b, ("", tokens(this.varlist)[4]))
 
-    st_matrix(V, (vce == "conservative"? this.se_conservative: this.se_adjusted)^2)
+    st_matrix(V, (vce == "conservative"? this.se_conservative[index]: this.se_adjusted[index])^2)
     st_matrixcolstripe(V, (eqnames, rownames))
     st_matrixrowstripe(V, (eqnames, rownames))
+}
+
+void function Staggered::events()
+{
+    if ( this.multievent ) {
+        printf("(warning: first event time reported; other see e() for other times)\n")
+
+        st_matrix("e(eventTime)", colshape(this.eventTime, 1))
+        st_matrixcolstripe("e(eventTime)", ("", tokens(this.varlist)[2]))
+
+        st_matrix("e(thetastar)", this.thetastar)
+        st_matrixcolstripe("e(thetastar)", ("", tokens(this.varlist)[4]))
+        st_matrixrowstripe("e(thetastar)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
+
+        st_matrix("e(se_conservative)", this.se_conservative)
+        st_matrixcolstripe("e(se_conservative)", ("", tokens(this.varlist)[4]))
+        st_matrixrowstripe("e(se_conservative)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
+
+        st_matrix("e(se_adjusted)", this.se_adjusted)
+        st_matrixcolstripe("e(se_adjusted)", ("", tokens(this.varlist)[4]))
+        st_matrixrowstripe("e(se_adjusted)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
+
+        if ( this.anyfisher ) {
+            st_matrix("e(fisher_conservative)", this.fisher_conservative)
+            st_matrixrowstripe("e(fisher_conservative)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
+
+            st_matrix("e(fisher_adjusted)", this.fisher_adjusted)
+            st_matrixrowstripe("e(fisher_adjusted)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
+        }
+    }
+    else if ( this.anyfisher ) {
+        st_matrix("e(fisher_conservative)", this.fisher_conservative)
+        st_matrix("e(fisher_adjusted)",     this.fisher_adjusted)
+    }
 }
 end
