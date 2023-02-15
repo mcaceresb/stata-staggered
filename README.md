@@ -19,11 +19,11 @@ net install staggered, from(`github'/mcaceresb/stata-staggered/main) replace
 ```
 
 You can also clone or download the code manually, e.g. to
-`stata-multe-main`, and install from a local folder:
+`stata-staggered-main`, and install from a local folder:
 
 ```stata
-cap noi net uninstall multe
-net install multe, from(`c(pwd)'/stata-multe-main)
+cap noi net uninstall staggered
+net install staggered, from(`c(pwd)'/stata-staggered-main)
 ```
 
 ## Examples
