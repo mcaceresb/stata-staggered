@@ -1,4 +1,4 @@
-*! version 0.3.0 13Feb2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
+*! version 0.3.1 15Feb2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
 *! staggered R to Stata translation
 
 capture program drop staggered
@@ -28,7 +28,7 @@ program staggered, eclass
     local vce      = trim(lower(`"`vce'"'))
 
     if "`vce'" == "" local vce adjusted
-    if !inlist("`vce'", "conservative", "adjusted") {
+    if !inlist("`vce'", "neyman", "adjusted") {
         disp as err "vce() option `vce' not known"
         exit 198
     }
@@ -83,7 +83,7 @@ program Display, eclass
 
     local vce = trim(lower(`"`vce'"'))
     if "`vce'" == "" local vce adjusted
-    if !inlist("`vce'", "conservative", "adjusted") {
+    if !inlist("`vce'", "neyman", "adjusted") {
         disp as err "vce() option `vce' not known; defaulting to 'adjusted'"
     }
 
@@ -120,8 +120,8 @@ program FreeMatrix
     foreach FM of local 0 {
         cap error 0
         while ( _rc == 0 ) {
-            cap confirm matrix MulTE`++FreeCounter'
-            c_local `FM' MulTE`FreeCounter'
+            cap confirm matrix Staggered`++FreeCounter'
+            c_local `FM' Staggered`FreeCounter'
         }
     }
 end

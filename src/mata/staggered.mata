@@ -45,12 +45,12 @@ class Staggered
     real colvector V_theta
     real colvector Xhat
     real colvector adjustmentFactor
-    real colvector var_conservative
-    real colvector se_conservative
+    real colvector var_neyman
+    real colvector se_neyman
     real colvector var_adjusted
     real colvector se_adjusted
     real colvector fisher_adjusted    
-    real colvector fisher_conservative
+    real colvector fisher_neyman
 
     // functions
     void new()
@@ -138,13 +138,13 @@ void function Staggered::estimate()
     this.adjustmentFactor    = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
     this.betastar            = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
     this.se_adjusted         = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
-    this.se_conservative     = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.se_neyman           = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
     this.thetahat0           = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
     this.thetastar           = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
     this.var_adjusted        = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
-    this.var_conservative    = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
+    this.var_neyman          = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
     this.fisher_adjusted     = J(max((length(this.eventTime)\1)), 1, .)
-    this.fisher_conservative = J(max((length(this.eventTime)\1)), 1, .)
+    this.fisher_neyman       = J(max((length(this.eventTime)\1)), 1, .)
 
     // If estimand is provided, calculate the appropriate A_theta_list
     if ( this.estimand == "eventstudy" ) {
@@ -186,11 +186,11 @@ void function Staggered::estimate()
         this.adjustmentFactor = this.adjustmentFactor[1::(length(this.adjustmentFactor)-1)]
         this.betastar         = this.betastar        [1::(length(this.betastar        )-1)]
         this.se_adjusted      = this.se_adjusted     [1::(length(this.se_adjusted     )-1)]
-        this.se_conservative  = this.se_conservative [1::(length(this.se_conservative )-1)]
+        this.se_neyman        = this.se_neyman       [1::(length(this.se_neyman       )-1)]
         this.thetahat0        = this.thetahat0       [1::(length(this.thetahat0       )-1)]
         this.thetastar        = this.thetastar       [1::(length(this.thetastar       )-1)]
         this.var_adjusted     = this.var_adjusted    [1::(length(this.var_adjusted    )-1)]
-        this.var_conservative = this.var_conservative[1::(length(this.var_conservative)-1)]
+        this.var_neyman       = this.var_neyman      [1::(length(this.var_neyman      )-1)]
     }
 }
 
@@ -656,12 +656,12 @@ void function Staggered::compute_estimand(|real scalar index)
     this.adjustmentFactor[index] = (betahat' * (S_preperiod / this.Ng) * betahat) / sum(this.cohort_size)
     this.betastar[index]         = this.V_thetaX[index] / this.V_X[index]
     this.thetastar[index]        = this.thetahat0[index] - this.Xhat[index] * this.betastar[index]
-    this.var_conservative[index] = this.V_theta[index] - this.V_thetaX[index] * this.betastar[index]
-    this.se_conservative[index]  = this.var_conservative[index] > 0? sqrt(this.var_conservative[index]): 0
-    this.var_adjusted[index]     = this.var_conservative[index] - this.adjustmentFactor[index]
+    this.var_neyman[index]       = this.V_theta[index] - this.V_thetaX[index] * this.betastar[index]
+    this.se_neyman[index]        = this.var_neyman[index] > 0? sqrt(this.var_neyman[index]): 0
+    this.var_adjusted[index]     = this.var_neyman[index] - this.adjustmentFactor[index]
     this.se_adjusted[index]      = this.var_adjusted[index] > 0? sqrt(this.var_adjusted[index]): 0
 
-    if ( any((this.var_conservative[index], this.var_adjusted[index]) :< 0) ) {
+    if ( any((this.var_neyman[index], this.var_adjusted[index]) :< 0) ) {
         errprintf("Calculated variance is less than 0. Setting SE to 0.\n")
     }
 }
@@ -680,7 +680,7 @@ void function Staggered::compute_fisher(|real scalar index)
     real scalar dummy
     real colvector _thetastar
     real colvector _se_adjusted
-    real colvector _se_conservative
+    real colvector _se_neyman
 
     if ( !this.anyfisher ) return
 
@@ -688,17 +688,17 @@ void function Staggered::compute_fisher(|real scalar index)
 
     _thetastar       = J(num_fisher, 1, .)
     _se_adjusted     = J(num_fisher, 1, .)
-    _se_conservative = J(num_fisher, 1, .)
+    _se_neyman       = J(num_fisher, 1, .)
     for(i = 1; i <= num_fisher; i++) {
         this.permute_cohort(i)
         this.compute_estimand(dummy)
-        _thetastar[i]       = this.thetastar[dummy]
-        _se_adjusted[i]     = this.se_adjusted[dummy]
-        _se_conservative[i] = this.se_conservative[dummy]
+        _thetastar[i]      = this.thetastar[dummy]
+        _se_adjusted[i]    = this.se_adjusted[dummy]
+        _se_neyman[i]      = this.se_neyman[dummy]
     }
 
-    fisher_adjusted[index]     = mean(abs(this.thetastar[index] / this.se_adjusted[index])     :< abs(_thetastar :/ _se_adjusted))
-    fisher_conservative[index] = mean(abs(this.thetastar[index] / this.se_conservative[index]) :< abs(_thetastar :/ _se_conservative))
+    fisher_adjusted[index] = mean(abs(this.thetastar[index] / this.se_adjusted[index]) :< abs(_thetastar :/ _se_adjusted))
+    fisher_neyman[index]   = mean(abs(this.thetastar[index] / this.se_neyman[index])   :< abs(_thetastar :/ _se_neyman))
 }
 
 // Shuffle outcome y; note it's the only thing we need to shuffle
@@ -750,22 +750,42 @@ void function Staggered::post(string scalar b, string scalar V,| string scalar v
     if ( args() < 4 ) index = 1
 
     string vector rownames, eqnames
-    eqnames  = ""
-    rownames = tokens(this.varlist)[3]
-    st_matrix(b, this.thetastar[index])
-    st_matrixcolstripe(b, (eqnames, rownames))
-    st_matrixrowstripe(b, ("", tokens(this.varlist)[4]))
 
-    st_matrix(V, (vce == "conservative"? this.se_conservative[index]: this.se_adjusted[index])^2)
-    st_matrixcolstripe(V, (eqnames, rownames))
-    st_matrixrowstripe(V, (eqnames, rownames))
+    if ( this.multievent ) {
+        printf("(warning: e(V) is a diagonal matrix of SEs, not a full vcov matrix)\n")
+        if ( min(this.eventTime) >= 0 ) {
+            rownames = strofreal(this.eventTime') :+ ("." :+ tokens(this.varlist)[3])
+        }
+        else {
+            rownames = ((tokens(this.varlist)[3] :+ " ") \ J(length(this.eventTime)-1, 1, "")) :+ strofreal(this.eventTime')
+            // rownames = strofreal(this.eventTime')
+        }
+
+        eqnames = J(length(this.eventTime), 1, "")
+        st_matrix(b, rowshape(this.thetastar, 1))
+        st_matrixcolstripe(b, (eqnames, rownames))
+        st_matrixrowstripe(b, ("", tokens(this.varlist)[4]))
+
+        st_matrix(V, diag(vce == "neyman"? this.se_neyman: this.se_adjusted):^2)
+        st_matrixcolstripe(V, (eqnames, rownames))
+        st_matrixrowstripe(V, (eqnames, rownames))
+    }
+    else {
+        eqnames  = ""
+        rownames = tokens(this.varlist)[3]
+        st_matrix(b, this.thetastar[index])
+        st_matrixcolstripe(b, (eqnames, rownames))
+        st_matrixrowstripe(b, ("", tokens(this.varlist)[4]))
+
+        st_matrix(V, (vce == "neyman"? this.se_neyman[index]: this.se_adjusted[index])^2)
+        st_matrixcolstripe(V, (eqnames, rownames))
+        st_matrixrowstripe(V, (eqnames, rownames))
+    }
 }
 
 void function Staggered::events()
 {
     if ( this.multievent ) {
-        printf("(warning: first event time reported; other see e() for other times)\n")
-
         st_matrix("e(eventTime)", colshape(this.eventTime, 1))
         st_matrixcolstripe("e(eventTime)", ("", tokens(this.varlist)[2]))
 
@@ -773,25 +793,25 @@ void function Staggered::events()
         st_matrixcolstripe("e(thetastar)", ("", tokens(this.varlist)[4]))
         st_matrixrowstripe("e(thetastar)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
 
-        st_matrix("e(se_conservative)", this.se_conservative)
-        st_matrixcolstripe("e(se_conservative)", ("", tokens(this.varlist)[4]))
-        st_matrixrowstripe("e(se_conservative)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
+        st_matrix("e(se_neyman)", this.se_neyman)
+        st_matrixcolstripe("e(se_neyman)", ("", tokens(this.varlist)[4]))
+        st_matrixrowstripe("e(se_neyman)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
 
         st_matrix("e(se_adjusted)", this.se_adjusted)
         st_matrixcolstripe("e(se_adjusted)", ("", tokens(this.varlist)[4]))
         st_matrixrowstripe("e(se_adjusted)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
 
         if ( this.anyfisher ) {
-            st_matrix("e(fisher_conservative)", this.fisher_conservative)
-            st_matrixrowstripe("e(fisher_conservative)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
+            st_matrix("e(fisher_neyman)", this.fisher_neyman)
+            st_matrixrowstripe("e(fisher_neyman)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
 
             st_matrix("e(fisher_adjusted)", this.fisher_adjusted)
             st_matrixrowstripe("e(fisher_adjusted)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
         }
     }
     else if ( this.anyfisher ) {
-        st_matrix("e(fisher_conservative)", this.fisher_conservative)
-        st_matrix("e(fisher_adjusted)",     this.fisher_adjusted)
+        st_matrix("e(fisher_neyman)", this.fisher_neyman)
+        st_matrix("e(fisher_adjusted)", this.fisher_adjusted)
     }
 }
 end

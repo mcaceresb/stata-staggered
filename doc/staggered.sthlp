@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.3.0 13Feb2023}{...}
+{* *! version 0.3.1 15Feb2023}{...}
 {viewerdialog staggered "dialog staggered"}{...}
 {vieweralsosee "[R] staggered" "mansection R staggered"}{...}
 {viewerjumpto "Syntax" "staggered##syntax"}{...}
@@ -44,7 +44,7 @@ xx
 {synopt :{opt eventTime(numlist)}} Event times for estimand eventstudy (default 0).{p_end}
 {synopt :{opt num_fisher(int)}} Number of fisher permutations (default 0).{p_end}
 {synopt :{opt use_last_treated_only}} Not yet coded.{p_end}
-{synopt :{opt vce(str)}} Either 'conservative' or 'adjusted' (default){p_end}
+{synopt :{opt vce(str)}} Either 'neyman' or 'adjusted' (default){p_end}
 
 {p2colreset}{...}
 {p 4 6 2}
@@ -83,7 +83,7 @@ xx
 {synopt:{cmd:e(individual)}}name of variable identifying individuals{p_end}
 {synopt:{cmd:e(time)}}name of variable identifying the time period{p_end}
 {synopt:{cmd:e(cohort)}}name of variable identifying cohort (when treated){p_end}
-{synopt:{cmd:e(vce)}}variance computed (conservative, adjusted){p_end}
+{synopt:{cmd:e(vce)}}variance computed (neyman, adjusted){p_end}
 {synopt:{cmd:e(vcetype)}}same as vce but capitalized{p_end}
 {synopt:{cmd:e(properties)}}{cmd:b V}{p_end}
 {synopt:{cmd:e(mata)}}name of mata object where results are stored (see below){p_end}
@@ -93,9 +93,9 @@ xx
 {synopt:{cmd:e(V)}}variance of theta{p_end}
 {synopt:{cmd:e(eventTime)}}event times (only with multiple eventTime values){p_end}
 {synopt:{cmd:e(thetastar)}}estimates (only with multiple eventTime values){p_end}
-{synopt:{cmd:e(se_conservative)}}conservative/neyman SEs (only with multiple eventTime values){p_end}
+{synopt:{cmd:e(se_neyman)}}neyman SEs (only with multiple eventTime values){p_end}
 {synopt:{cmd:e(se_adjusted)}}adjusted SEs (only with multiple eventTime values){p_end}
-{synopt:{cmd:e(fisher_conservative)}}conservative/neyman fisher p-value (only with num_fisher()){p_end}
+{synopt:{cmd:e(fisher_neyman)}}neyman fisher p-value (only with num_fisher()){p_end}
 {synopt:{cmd:e(fisher_adjusted)}}adjusted fisher p-value (only with num_fisher)){p_end}
 
 {p2col 5 23 26 2: Functions}{p_end}
@@ -148,14 +148,14 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
         real matrix A_0
             auxiliary matrix with rows containing A_{0, g}
 
-        real colvector se_conservative
-            estimate of 'conservative' SE
+        real colvector se_neyman
+            estimate of 'neyman' SE
 
         real colvector se_adjusted
             estimate of 'adjusted' SE
 
-        real colvector fisher_conservative
-            simulated 'conservative' fisher p-value
+        real colvector fisher_neyman
+            simulated 'neyman' fisher p-value
 
         real colvector fisher_adjusted
             simulated 'adjusted' fisher p-value
