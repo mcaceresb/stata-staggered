@@ -19,7 +19,7 @@ net install staggered, from(`github'/mcaceresb/stata-staggered/main) replace
 ```
 
 You can also clone or download the code manually, e.g. to
-`stata-multe-main`, and install from a local folder:
+`stata-staggered-main`, and install from a local folder:
 
 ```stata
 cap noi net uninstall staggered
