@@ -28,11 +28,13 @@ class Staggered
     real scalar    anyfisher
 
     // options
-    real scalar    skip_data_check
     real vector    eventTime
     real scalar    num_fisher
-    real scalar    use_last_treated_only
     string scalar  estimand
+    real scalar    user_beta
+    real scalar    skip_data_check
+    real scalar    use_last_treated_only
+    real scalar    drop_treated_beforet
 
     // results
     real matrix    A_theta
@@ -49,7 +51,7 @@ class Staggered
     real colvector se_neyman
     real colvector var_adjusted
     real colvector se_adjusted
-    real colvector fisher_adjusted    
+    real colvector fisher_adjusted
     real colvector fisher_neyman
 
     // functions
@@ -61,6 +63,7 @@ class Staggered
     void post()
     void events()
     void estimate()
+    void results()
     void permute_cohort()
 
     void setup_encode_i()
@@ -86,11 +89,13 @@ class Staggered scalar function StaggeredNew(string scalar _varlist, string scal
 void function Staggered::new()
 {
     this.clear()
-    this.skip_data_check       = (st_local("StagOpt_skip_data_check")         != "")
     this.eventTime             = strtoreal(tokens(st_local("StagOpt_eventTime")))
     this.num_fisher            = strtoreal(st_local("StagOpt_num_fisher"))
-    this.use_last_treated_only = (st_local("StagOpt_use_last_treated_only")   != "")
     this.estimand              = st_local("StagOpt_estimand")
+    this.user_beta             = strtoreal(st_local("StagOpt_beta"))
+    this.skip_data_check       = (st_local("StagOpt_skip_data_check")       != "")
+    this.use_last_treated_only = (st_local("StagOpt_use_last_treated_only") != "")
+    this.drop_treated_beforet  = (st_local("StagOpt_drop_treated_beforet")  != "")
 }
 
 void function Staggered::clear()
@@ -355,7 +360,7 @@ void function Staggered::compute_Ag_simple()
     real colvector g_list, t_list
     real colvector i_sel, i_inv, g_wgt, Ng_control
 
-    real scalar i, g_map, N_total
+    real scalar i, g_map, g_max, N_total
     real matrix A_0_w
 
     // List of all 'candidate' g, t (cohort, period)
@@ -367,6 +372,7 @@ void function Staggered::compute_Ag_simple()
     t_list = t_all[t_sel]
     g_sel  = selectindex((min(t_list) :<= g_all) :& (g_all :< max(g_all)))
     g_list = g_all[g_sel]
+    g_max  = max(g_all)
     this.preperiods = sum(t_all :< min(g_all))
 
     // It's easier to expain the A_theta matrix in terms of a loop for g, t pairs
@@ -392,7 +398,7 @@ void function Staggered::compute_Ag_simple()
     this.A_theta = J(this.Ng, this.Nt, 0)
     Ng_control = sum(this.cohort_size) :- runningsum(this.cohort_size)
     for(i = 1; i <= length(t_list); i++) {
-        i_sel   = selectindex(g_all :>  t_list[i])
+        i_sel   = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
         i_inv   = selectindex(g_all :<= t_list[i])
         g_wgt   = this.cohort_size[g_sel[selectindex(g_list :<= t_list[i])]]
         N_total = N_total + sum(g_wgt)
@@ -414,7 +420,7 @@ void function Staggered::compute_Ag_simple()
     }
 
     for(i = 1; i <= length(t_list); i++) {
-        i_sel = selectindex(g_all :> t_list[i])
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
         this.A_0[i_sel, t_sel[i]] = this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]
     }
 
@@ -433,7 +439,7 @@ void function Staggered::compute_Ag_cohort()
     real colvector g_list, t_list
     real colvector i_sel, i_inv, g_wgt, g_scale, Ng_control
 
-    real scalar i, g_map, t_tot, N_total
+    real scalar i, g_map, g_max, t_tot, N_total
     real matrix A_0_w
 
     // This is more or less the same as the simple version, except the
@@ -447,6 +453,7 @@ void function Staggered::compute_Ag_cohort()
     t_list = t_all[t_sel]
     g_sel  = selectindex((g_all :< max(g_all)) :& (g_all :<= max(t_all)))
     g_list = g_all[g_sel]
+    g_max  = max(g_all)
     this.preperiods = sum(t_all :< min(g_all))
 
     // A_theta; scaling changes a decent amount but overall similar
@@ -460,10 +467,10 @@ void function Staggered::compute_Ag_cohort()
     this.A_theta = J(this.Ng, this.Nt, 0)
     Ng_control = sum(this.cohort_size) :- runningsum(this.cohort_size)
     for(i = 1; i <= length(t_list); i++) {
-        i_sel   = selectindex(g_all :>  t_list[i])
-        i_inv   = selectindex(g_all :<= t_list[i])
-        t_tot   = sum(g_list :<= t_list[i])
-        g_wgt   = this.cohort_size[1::t_tot] :/ g_scale[1::t_tot]
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
+        i_inv = selectindex(g_all :<= t_list[i])
+        t_tot = sum(g_list :<= t_list[i])
+        g_wgt = this.cohort_size[1::t_tot] :/ g_scale[1::t_tot]
         this.A_theta[i_sel, t_sel[i]] = - J(1, length(g_wgt), this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]) * g_wgt
         this.A_theta[i_inv, t_sel[i]] = this.cohort_size[i_inv] :/ g_scale[i_inv]
     }
@@ -479,7 +486,7 @@ void function Staggered::compute_Ag_cohort()
     }
 
     for(i = 1; i <= length(t_list); i++) {
-        i_sel = selectindex(g_all :> t_list[i])
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
         this.A_0[i_sel, t_sel[i]] = this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]
     }
 
@@ -499,7 +506,7 @@ void function Staggered::compute_Ag_calendar()
     real colvector i_sel, i_inv, g_wgt, Ng_control
 
     real rowvector g_map
-    real scalar i
+    real scalar i, g_max
     real matrix A_0_w
 
     g_all  = this.g[cohort_info[., 1]]
@@ -508,6 +515,7 @@ void function Staggered::compute_Ag_calendar()
     t_list = t_all[t_sel]
     g_sel  = selectindex(g_all :<= max(t_sel))
     g_list = g_all[g_sel]
+    g_max  = max(g_all)
     this.preperiods = sum(t_all :< min(g_all))
 
     // A_theta; scaling changes a decent amount but overall similar
@@ -515,7 +523,7 @@ void function Staggered::compute_Ag_calendar()
     this.A_theta = J(this.Ng, this.Nt, 0)
     Ng_control = sum(this.cohort_size) :- runningsum(this.cohort_size)
     for(i = 1; i <= length(t_list); i++) {
-        i_sel = selectindex(g_all :>  t_list[i])
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
         i_inv = selectindex(g_all :<= t_list[i])
         g_wgt = this.cohort_size[i_inv] :/ sum(this.cohort_size[i_inv])
         this.A_theta[i_sel, t_sel[i]] = - J(1, length(g_wgt), this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]) * g_wgt
@@ -536,7 +544,7 @@ void function Staggered::compute_Ag_calendar()
         A_0_w[i, g_map[i_sel]] = this.cohort_size[g_sel[i_sel]]' / sum(this.cohort_size[g_sel[i_sel]])
     }
     for(i = 1; i <= length(t_list); i++) {
-        i_sel = selectindex(g_all :> t_list[i])
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
         this.A_0[i_sel, t_sel[i]] = this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]
     }
 
@@ -554,7 +562,7 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
     real colvector g_list, t_list
     real colvector i_sel, i_inv, Ng_control
 
-    real scalar i, g_map, x_map, N_total
+    real scalar i, g_map, g_max, x_map, N_total
     real matrix A_0_w
     g_all  = this.g[cohort_info[., 1]]
     t_all  = this.t[1::this.Nt]
@@ -566,6 +574,7 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
 
     g_list = g_all[g_sel]
     t_list = g_list :+ event
+    g_max  = max(g_all)
     this.preperiods = sum(t_all :< min(g_all))
 
     t_sel = J(1, length(t_list), 0)
@@ -581,8 +590,8 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
     this.A_theta = J(this.Ng, this.Nt, 0)
     Ng_control = sum(this.cohort_size) :- runningsum(this.cohort_size)
     for(i = 1; i <= length(t_list); i++) {
-        i_sel   = selectindex(g_all :>  t_list[i])
-        i_inv   = selectindex(g_all :<= g_list[i])
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
+        i_inv = selectindex(g_all :<= g_list[i])
         this.A_theta[i_sel, t_sel[i]] = - this.cohort_size[x_map[i]] :* this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]
         this.A_theta[i_inv[length(i_inv)], t_sel[i]] = this.cohort_size[x_map[i]]
     }
@@ -598,7 +607,7 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
         A_0_w[i_sel, g_map] = this.cohort_size[x_map[i]]
     }
     for(i = 1; i <= length(t_list); i++) {
-        i_sel = selectindex(g_all :> t_list[i])
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
         this.A_0[i_sel, t_sel[i]] = this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]
     }
     this.A_0 = - this.A_0 * A_0_w
@@ -654,9 +663,9 @@ void function Staggered::compute_estimand(|real scalar index)
         S_preperiod = S_preperiod + S_g[preindex, preindex]
     }
     this.adjustmentFactor[index] = (betahat' * (S_preperiod / this.Ng) * betahat) / sum(this.cohort_size)
-    this.betastar[index]         = this.V_thetaX[index] / this.V_X[index]
+    this.betastar[index]         = (this.user_beta == .)? (this.V_thetaX[index] / this.V_X[index]): this.user_beta
     this.thetastar[index]        = this.thetahat0[index] - this.Xhat[index] * this.betastar[index]
-    this.var_neyman[index]       = this.V_theta[index] - this.V_thetaX[index] * this.betastar[index]
+    this.var_neyman[index]       = this.V_theta[index] + this.betastar[index]' * this.V_X[index] * this.betastar[index] - 2 * this.V_thetaX[index] * this.betastar[index]
     this.se_neyman[index]        = this.var_neyman[index] > 0? sqrt(this.var_neyman[index]): 0
     this.var_adjusted[index]     = this.var_neyman[index] - this.adjustmentFactor[index]
     this.se_adjusted[index]      = this.var_adjusted[index] > 0? sqrt(this.var_adjusted[index]): 0
@@ -812,6 +821,38 @@ void function Staggered::events()
     else if ( this.anyfisher ) {
         st_matrix("e(fisher_neyman)", this.fisher_neyman)
         st_matrix("e(fisher_adjusted)", this.fisher_adjusted)
+    }
+}
+
+void function Staggered::results()
+{
+    real matrix results
+    string vector colnames, rownames, eqnames
+
+    if ( this.multievent ) {
+        eqnames  = ""
+        colnames = tokens(this.varlist)[3] \ "se_adjusted" \ "se_neyman"
+        rownames = strofreal(this.eventTime')
+        results  = this.thetastar, this.se_adjusted, this.se_neyman
+        if ( this.anyfisher ) {
+            colnames = colnames \ "fisher_pval_neyman" \ "fisher_pval_adjusted"
+            results  = results, this.fisher_neyman, this.fisher_adjusted
+        }
+        st_matrix("e(results)", results)
+        st_matrixcolstripe("e(results)", (J(length(colnames), 1, ""), colnames))
+        st_matrixrowstripe("e(results)", (J(length(this.eventTime), 1, ""), rownames))
+    }
+    else {
+        eqnames  = ""
+        colnames = tokens(this.varlist)[3] \ "se_adjusted" \ "se_neyman"
+        results  = this.thetastar[1], this.se_adjusted[1], this.se_neyman[1]
+        if ( this.anyfisher ) {
+            colnames = colnames \ "fisher_pval_neyman" \ "fisher_pval_adjusted"
+            results  = results, this.fisher_neyman, this.fisher_adjusted
+        }
+        st_matrix("e(results)", results)
+        st_matrixcolstripe("e(results)", (J(length(colnames), 1, ""), colnames))
+        st_matrixrowstripe("e(results)", ("", tokens(this.varlist)[4]))
     }
 }
 end

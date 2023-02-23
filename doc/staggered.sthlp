@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.3.1 15Feb2023}{...}
+{* *! version 0.4.0 22Feb2023}{...}
 {viewerdialog staggered "dialog staggered"}{...}
 {vieweralsosee "[R] staggered" "mansection R staggered"}{...}
 {viewerjumpto "Syntax" "staggered##syntax"}{...}
@@ -40,11 +40,15 @@ xx
 {synopt :{opt t(varname)}} Time{p_end}
 {synopt :{opt g(varname)}} Cohort{p_end}
 {synopt :{opt estimand(str)}} Estimand: simple, cohort, calendar, eventstudy.{p_end}
-{synopt :{opt skip_data_check}} Do not balance data (warning: data must already be balanced).{p_end}
 {synopt :{opt eventTime(numlist)}} Event times for estimand eventstudy (default 0).{p_end}
+{synopt :{opt beta(real)}} User-input beta (to use instead of betastar).{p_end}
 {synopt :{opt num_fisher(int)}} Number of fisher permutations (default 0).{p_end}
-{synopt :{opt use_last_treated_only}} Not yet coded.{p_end}
+{synopt :{opt skip_data_check}} Do not balance data (warning: data must already be balanced).{p_end}
+{synopt :{opt drop_treated_beforet}} Drop cohorts treated (weakly) before first time period.{p_end}
+{synopt :{opt use_last_treated_only}} Only use last treated cohort as treatment.{p_end}
 {synopt :{opt vce(str)}} Either 'neyman' or 'adjusted' (default){p_end}
+{synopt :{opt sa}} Callaway and Sant'Anna estimator (alias for beta(1) drop_treated_beforet).{p_end}
+{synopt :{opt sa}} Sun and Abraham estimator (alias for beta(1) drop_treated_beforet use_last_treated_only).{p_end}
 
 {p2colreset}{...}
 {p 4 6 2}
@@ -97,6 +101,7 @@ xx
 {synopt:{cmd:e(se_adjusted)}}adjusted SEs (only with multiple eventTime values){p_end}
 {synopt:{cmd:e(fisher_neyman)}}neyman fisher p-value (only with num_fisher()){p_end}
 {synopt:{cmd:e(fisher_adjusted)}}adjusted fisher p-value (only with num_fisher)){p_end}
+{synopt:{cmd:e(results)}}single matrix consolidating all results (estimate and SEs){p_end}
 
 {p2col 5 23 26 2: Functions}{p_end}
 {synopt:{cmd:e(sample)}}marks estimation sample{p_end}
@@ -128,7 +133,7 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
             estimated coefficient of interest
 
         real colvector betastar
-            estimated \beta^*
+            estimated \beta^* (or user-provided beta)
 
         real colvector Xhat
             estimate of \hat{X}

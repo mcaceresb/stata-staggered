@@ -1,4 +1,4 @@
-*! version 0.3.1 15Feb2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
+*! version 0.4.0 22Feb2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
 *! staggered R to Stata translation
 
 capture program drop staggered
@@ -19,10 +19,33 @@ program staggered, eclass
            MATAsave(str)                    /// save resulting mata object
            eventTime(numlist)               /// event study times (default 0 with estimand eventstudy)
            num_fisher(int 0)                /// fisher permutations (if > 0)
+           cs sa                            /// Callway & Sant'Anna (cs) or Sun & Abraham (sa) estimators
+           beta(str)                        /// user input beta (use insntead of betastar)
            skip_data_check                  /// do not check if data balanced
-           use_last_treated_only            /// xx not yet coded
+           drop_treated_beforet             /// drop all cohorts treated before first time period
+           use_last_treated_only            /// only use last cohort as control
            `options'                        ///
     ]
+
+    * ---------------------
+    * Parse all the options
+    * ---------------------
+
+    if ( ("`cs'" != "") & ("`sa'" != "") ) {
+        disp as err "unable to use both options -cs- and -sa-"
+        exit 198
+    }
+    else if ( "`cs'`sa'" != "" ) {
+        if "`cs'" != "" local use_last_treated_only
+        if "`sa'" != "" local use_last_treated_only use_last_treated_only
+
+        local drop_treated_beforet drop_treated_beforet
+        if ( "`beta'" != "" ) {
+            disp as txt "Option -`cs'`sa'- is an alias for beta(1) `drop_treated_beforet' `use_last_treated_only';"
+            disp as txt "user options will be overriden by -`cs'`sa'-"
+        }
+        local beta 1
+    }
 
     local estimand = trim(lower(`"`estimand'"'))
     local vce      = trim(lower(`"`vce'"'))
@@ -38,19 +61,38 @@ program staggered, eclass
         exit 198
     }
 
-    local options use_last_treated_only
-    foreach opt of local options {
-        if "``opt''" != "" disp as err "warning: option `opt' not yet implemented; xx rawwwr"
-    }
-
-    local options skip_data_check eventTime num_fisher estimand
+    local options skip_data_check eventTime num_fisher estimand beta use_last_treated_only drop_treated_beforet
     foreach opt of local options {
         local StagOpt_`opt': copy local `opt'
     }
 
+    if "`beta'" != "" {
+        cap confirm number `beta'
+        if _rc {
+            disp as err "option beta() must be numeric"
+            exit 7
+        }
+    }
+
+    cap confirm numeric variable `t' `g'
+    if ( _rc ) {
+        disp as err "t() and g() must be numeric (preferably integers) and in the same units"
+        exit 7
+    }
+
+    * ----------------------
+    * Compute the estimation
+    * ----------------------
+
     local y: copy local varlist
     local varlist `i' `t' `g' `varlist'
     marksample touse, strok
+
+    * Drop units with g =< min(t); for cs and sa, ATT(t,g) is not identified for these units
+    if ( "`drop_treated_beforet'" != "" ) {
+        qui sum `t', meanonly
+        qui replace `touse' = 0 if `g' <= r(min)
+    }
 
     local StagOpt_Caller staggered
     local Staggered StaggeredResults
@@ -98,6 +140,7 @@ program Display, eclass
         ereturn post `b' `V', esample(`touse') obs(`N')
     }
     mata `namelist'.events()
+    mata `namelist'.results()
     ereturn local vcetype = proper("`vce'")
     ereturn local vce `vce'
     _coef_table, noempty `options'
