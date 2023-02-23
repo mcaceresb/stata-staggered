@@ -14,7 +14,6 @@ class Staggered
     real colvector sel
     real matrix    info
     real matrix    cohort_info
-    real matrix    cohort_size
 
     // info
     string scalar  varlist
@@ -26,6 +25,9 @@ class Staggered
     real scalar    preperiods
     real scalar    multievent
     real scalar    anyfisher
+    real colvector times
+    real colvector cohorts
+    real matrix    cohort_size
 
     // options
     real vector    eventTime
@@ -53,6 +55,7 @@ class Staggered
     real colvector se_adjusted
     real colvector fisher_adjusted
     real colvector fisher_neyman
+    real matrix    Wald_test
 
     // functions
     void new()
@@ -108,7 +111,7 @@ void function Staggered::clear()
     this.sel   = .
     this.info  = .
     this.cohort_info = .
-    this.cohort_size = .
+    // this.cohort_size = .
 }
 
 void function Staggered::init(string vector _varlist, string scalar _touse)
@@ -126,6 +129,8 @@ void function Staggered::init(string vector _varlist, string scalar _touse)
     this.y = st_data(., vars[4], this.touse)[this.index]
     this.multievent = length(this.eventTime) > 1
     this.anyfisher  = this.num_fisher>0
+    this.times      = this.t[1::this.Nt]
+    this.cohorts    = this.g[this.cohort_info[., 1]]
 }
 
 void function Staggered::estimate()
@@ -150,6 +155,7 @@ void function Staggered::estimate()
     this.var_neyman          = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
     this.fisher_adjusted     = J(max((length(this.eventTime)\1)), 1, .)
     this.fisher_neyman       = J(max((length(this.eventTime)\1)), 1, .)
+    this.Wald_test           = J(max((length(this.eventTime)\1))+this.anyfisher, 2, .)
 
     // If estimand is provided, calculate the appropriate A_theta_list
     if ( this.estimand == "eventstudy" ) {
@@ -196,6 +202,7 @@ void function Staggered::estimate()
         this.thetastar        = this.thetastar       [1::(length(this.thetastar       )-1)]
         this.var_adjusted     = this.var_adjusted    [1::(length(this.var_adjusted    )-1)]
         this.var_neyman       = this.var_neyman      [1::(length(this.var_neyman      )-1)]
+        this.Wald_test        = this.Wald_test       [1::(rows  (this.Wald_test       )-1), .]
     }
 }
 
@@ -366,7 +373,7 @@ void function Staggered::compute_Ag_simple()
     // List of all 'candidate' g, t (cohort, period)
     // - t is a candidate if any g will be treated at g, except the last g
     // - g is a candidate if it will be treated at any t, except the last t
-    g_all  = this.g[cohort_info[., 1]]
+    g_all  = this.g[this.cohort_info[., 1]]
     t_all  = this.t[1::this.Nt]
     t_sel  = selectindex((min(g_all)  :<= t_all) :& (t_all :< max(g_all)))
     t_list = t_all[t_sel]
@@ -447,7 +454,7 @@ void function Staggered::compute_Ag_cohort()
     // - N_g/(sum_g N_g) for a given g
     // - 1/(# t >= g and < max_g) across t for a given g
 
-    g_all  = this.g[cohort_info[., 1]]
+    g_all  = this.g[this.cohort_info[., 1]]
     t_all  = this.t[1::this.Nt]
     t_sel  = selectindex((min(g_all) :<= t_all) :& (t_all :< max(g_all)))
     t_list = t_all[t_sel]
@@ -509,7 +516,7 @@ void function Staggered::compute_Ag_calendar()
     real scalar i, g_max
     real matrix A_0_w
 
-    g_all  = this.g[cohort_info[., 1]]
+    g_all  = this.g[this.cohort_info[., 1]]
     t_all  = this.t[1::this.Nt]
     t_sel  = selectindex((min(g_all) :<= t_all) :& (t_all :< max(g_all)))
     t_list = t_all[t_sel]
@@ -564,7 +571,7 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
 
     real scalar i, g_map, g_max, x_map, N_total
     real matrix A_0_w
-    g_all  = this.g[cohort_info[., 1]]
+    g_all  = this.g[this.cohort_info[., 1]]
     t_all  = this.t[1::this.Nt]
     g_sel  = selectindex(((g_all :+ event) :< max(g_all)) :& ((g_all :+ event) :<= max(t_all)))
     if( length(g_sel) == 0 ){
@@ -628,6 +635,13 @@ void function Staggered::compute_estimand(|real scalar index)
     real rowvector Y_sum, A0_g, At_g
     real matrix Y_g, S_g, S_preperiod
 
+    // R translation notes
+    //     varhat_conservative <-> var_neyman
+    //     Xvar                <-> V_X
+    //     X_theta_cov         <-> V_thetaX
+    //     all this is simplified for scalars but R writes it all for
+    //     matrices (though AFAIK it's all scalars)
+
     // This computes \beta^star and the variance of (\hat{theta}_0, \hat{X})
     // as presented under Proposition 2.1
     //
@@ -669,6 +683,8 @@ void function Staggered::compute_estimand(|real scalar index)
     this.se_neyman[index]        = this.var_neyman[index] > 0? sqrt(this.var_neyman[index]): 0
     this.var_adjusted[index]     = this.var_neyman[index] - this.adjustmentFactor[index]
     this.se_adjusted[index]      = this.var_adjusted[index] > 0? sqrt(this.var_adjusted[index]): 0
+    this.Wald_test[index, 1]     = this.Xhat[index]^2 / this.V_X[index]
+    this.Wald_test[index, 2]     = chi2tail(1, this.Wald_test[index, 1])
 
     if ( any((this.var_neyman[index], this.var_adjusted[index]) :< 0) ) {
         errprintf("Calculated variance is less than 0. Setting SE to 0.\n")
@@ -810,6 +826,10 @@ void function Staggered::events()
         st_matrixcolstripe("e(se_adjusted)", ("", tokens(this.varlist)[4]))
         st_matrixrowstripe("e(se_adjusted)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
 
+        st_matrix("e(Wald_test)", this.Wald_test)
+        st_matrixcolstripe("e(Wald_test)", (("" \ ""), ("Wald Statistic" \ "p-value")))
+        st_matrixrowstripe("e(Wald_test)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
+
         if ( this.anyfisher ) {
             st_matrix("e(fisher_neyman)", this.fisher_neyman)
             st_matrixrowstripe("e(fisher_neyman)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
@@ -818,9 +838,15 @@ void function Staggered::events()
             st_matrixrowstripe("e(fisher_adjusted)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
         }
     }
-    else if ( this.anyfisher ) {
-        st_matrix("e(fisher_neyman)", this.fisher_neyman)
-        st_matrix("e(fisher_adjusted)", this.fisher_adjusted)
+    else {
+        st_matrix("e(Wald_test)", this.Wald_test)
+        st_matrixcolstripe("e(Wald_test)", (("" \ ""), ("Wald Statistic" \ "p-value")))
+        st_matrixrowstripe("e(Wald_test)", ("", "X-hat"))
+
+        if ( this.anyfisher ) {
+            st_matrix("e(fisher_neyman)", this.fisher_neyman)
+            st_matrix("e(fisher_adjusted)", this.fisher_adjusted)
+        }
     }
 }
 

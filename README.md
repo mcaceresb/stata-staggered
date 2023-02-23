@@ -1,19 +1,19 @@
 Staggered
 =========
 
-`version 0.4.0 22Feb2023` | [Background](#background) | [Installation](#installation) | [Examples](#examples)
+`version 0.4.1 23Feb2023` | [Background](#background) | [Installation](#installation) | [Examples](#examples)
 
 ## Background
 
 The staggered package computes the efficient estimator for settings
 with randomized treatment timing, based on the theoretical results in
-[Roth and Sant’Anna (2021)](https://arxiv.org/pdf/2102.01291.pdf). If
+[Roth and Sant'Anna (2023)](https://psantanna.com/files/Roth_SantAnna_Staggered.pdf). If
 units are randomly (or quasi-randomly) assigned to begin treatment at
 different dates, the efficient estimator can potentially offer
 substantial gains over methods that only impose parallel trends. The
 package also allows for calculating the generalized
-difference-in-differences estimators of [Callaway and Sant’Anna
-(2020)](https://www.sciencedirect.com/science/article/pii/S0304407620303948)
+difference-in-differences estimators of [Callaway and Sant'Anna
+(2020)](https://psantanna.com/files/Roth_SantAnna_Staggered.pdf)
 and [Sun and Abraham
 (2020)](https://www.sciencedirect.com/science/article/abs/pii/S030440762030378X)
 and the simple-difference-in-means as special cases. This is the Stata
@@ -39,8 +39,8 @@ net install staggered, from(`c(pwd)'/stata-staggered-main)
 ## Examples
 
 We now illustrate how to use the package by re-creating some of the
-results in the application section of [Roth and Sant’Anna
-(2021)](https://arxiv.org/pdf/2102.01291.pdf). Our data contains a
+results in the application section of [Roth and Sant'Anna
+(2023)](https://psantanna.com/files/Roth_SantAnna_Staggered.pdf). Our data contains a
 balanced panel of police officers in Chicago who were randomly given a
 procedural justice training on different dates.
 
@@ -58,8 +58,8 @@ calculate the efficient estimator. With staggered treatment timing,
 there are several ways to aggregate treatment effects across cohorts and
 time periods. The following block of code calculates the simple,
 calendar-weighted, and cohort-weighted average treatment effects (see
-Section 2.3 of [Roth and Sant’Anna
-(2021)](https://arxiv.org/pdf/2102.01291.pdf) for more about different
+Section 2.3 of [Roth and Sant'Anna
+(2023)](https://psantanna.com/files/Roth_SantAnna_Staggered.pdf) for more about different
 aggregation schemes).
 
 ```stata
@@ -73,24 +73,6 @@ staggered complaints, i(uid) t(period) g(first_trained) estimand(simple)
 * --------------+----------------------------------------------------------------
 * first_trained |   -.001127   .0021152    -0.53   0.594    -.0052727    .0030187
 * -------------------------------------------------------------------------------
-
-* Report conservative SEs instead
-staggered, vce(neyman)
-
-* Staggered Treatment Effect Estimate
-* -------------------------------------------------------------------------------
-*               |               Neyman
-*    complaints |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
-* --------------+----------------------------------------------------------------
-* first_trained |   -.001127   .0021192    -0.53   0.595    -.0052806    .0030267
-* -------------------------------------------------------------------------------
-
-* All results are also saved in a matrix called e(results)
-matlist e(results)
-
-*              | first_t~d  se_adju~d  se_neyman 
-* -------------+---------------------------------
-*   complaints |  -.001127   .0021152   .0021192 
 ```
 
 ```stata
@@ -172,7 +154,7 @@ mata st_matrix("`CI'", st_matrix("r(table)")[5::6, .])
 mata st_matrix("`b'",  st_matrix("e(b)"))
 matrix colnames `CI' = `:rownames e(thetastar)'
 matrix colnames `b'  = `:rownames e(thetastar)'
-coefplot matrix(`b'), ci(`CI') vertical cionly yline(0)
+coefplot matrix(`b'), ci(`CI') vertical yline(0)
 * graph export test/StaggeredEventStudy.png, replace
 ```
 
@@ -199,6 +181,7 @@ staggered complaints, i(uid) t(period) g(first_trained) estimand(simple) num_fis
 * first_trained |   -.001127   .0021152    -0.53   0.594    -.0052727    .0030187
 * -------------------------------------------------------------------------------
 
+* All results are also saved in a matrix called e(results)
 matlist e(results)
 
 *              | first_t~d  se_adju~d  se_neyman  fisher_~n  fisher_~d 
@@ -210,7 +193,7 @@ matlist e(results)
 
 Our package also allows for the calculation of several other estimators
 proposed in the literature. For convenience we provide special functions
-for implementing the estimators proposed by Callaway & Sant’Anna and Sun
+for implementing the estimators proposed by Callaway & Sant'Anna and Sun
 & Abraham. The syntax is nearly identical to that for the efficient
 estimator:
 
@@ -240,7 +223,7 @@ staggered complaints, i(uid) t(period) g(first_trained) estimand(simple) sa
 * -------------------------------------------------------------------------------
 ```
 
-The Callaway and Sant’Anna estimator corresponds with calling the
+The Callaway and Sant'Anna estimator corresponds with calling the
 staggered function with option `beta(1)`, and the
 Sun and Abraham estimator corresponds with calling staggered with option `beta(1)`
 and `use_last_treated_only`. If one is interested in the simple
@@ -248,7 +231,7 @@ difference-in-means, one can call the staggered function with option
 `beta(0)`.
 
 Note that the standard errors returned in the se column are based on the
-design-based approach in Roth & Sant’Anna, and thus will differ somewhat
+design-based approach in Roth & Sant'Anna, and thus will differ somewhat
 from those returned by the did package. The standard errors in
 `se_neyman` should be very similar to those returned by the did package,
 although not identical in finite samples.

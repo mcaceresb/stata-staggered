@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.4.0 22Feb2023}{...}
+{* *! version 0.4.1 23Feb2023}{...}
 {viewerdialog staggered "dialog staggered"}{...}
 {vieweralsosee "[R] staggered" "mansection R staggered"}{...}
 {viewerjumpto "Syntax" "staggered##syntax"}{...}
@@ -99,6 +99,7 @@ xx
 {synopt:{cmd:e(thetastar)}}estimates (only with multiple eventTime values){p_end}
 {synopt:{cmd:e(se_neyman)}}neyman SEs (only with multiple eventTime values){p_end}
 {synopt:{cmd:e(se_adjusted)}}adjusted SEs (only with multiple eventTime values){p_end}
+{synopt:{cmd:e(Wald_test)}}Wald statistic (column 1) and p-value (column 2){p_end}
 {synopt:{cmd:e(fisher_neyman)}}neyman fisher p-value (only with num_fisher()){p_end}
 {synopt:{cmd:e(fisher_adjusted)}}adjusted fisher p-value (only with num_fisher)){p_end}
 {synopt:{cmd:e(results)}}single matrix consolidating all results (estimate and SEs){p_end}
@@ -122,6 +123,15 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
 
         real scalar Ng
             number of cohorts
+
+        real colvector times
+            vector of unique time periods (sorted)
+
+        real colvector cohorts
+            vector of unique cohorts (sorted)
+
+        real colvector cohort_size
+            vector of cohort sizes (as used internally in the estimation)
 
         real scalar preperiods
             number of pre-periods (i.e. before first cohort treated)
@@ -159,6 +169,9 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
         real colvector se_adjusted
             estimate of 'adjusted' SE
 
+        real matrix Wald_test
+            Wald statistic (column 1) and p-value (column 2)
+
         real colvector fisher_neyman
             simulated 'neyman' fisher p-value
 
@@ -169,4 +182,4 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
 {title:References}
 
 {pstd}
-See the paper by {browse "https://arxiv.org/pdf/2102.01291.pdf":Roth and Sant’Anna (2021)}.
+See the paper by {browse "https://psantanna.com/files/Roth_SantAnna_Staggered.pdf":Roth and Sant'Anna (2023)}.
