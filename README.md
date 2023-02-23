@@ -173,10 +173,10 @@ mata st_matrix("`b'",  st_matrix("e(b)"))
 matrix colnames `CI' = `:rownames e(thetastar)'
 matrix colnames `b'  = `:rownames e(thetastar)'
 coefplot matrix(`b'), ci(`CI') vertical cionly yline(0)
-* graph export test/StaggeredEventStudy.pdf, replace
+* graph export test/StaggeredEventStudy.png, replace
 ```
 
-<img src="test/StaggeredEventStudy.pdf" width="100%" />
+<img src="test/StaggeredEventStudy.png" width="100%" />
 
 ### Permutation tests
 
