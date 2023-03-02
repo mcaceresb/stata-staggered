@@ -1,4 +1,4 @@
-*! version 0.4.1 23Feb2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
+*! version 0.5.0 02Mar2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
 *! staggered R to Stata translation
 
 capture program drop staggered
@@ -56,10 +56,20 @@ program staggered, eclass
         exit 198
     }
 
-    if !inlist("`estimand'", "simple", "cohort", "calendar", "eventstudy") {
-        disp as err "estimand() option `estimand' not known"
+    local estimands simple cohort calendar eventstudy _all
+    local unknown: list estimand - estimands
+    if ( `:list sizeof unknown' ) {
+        disp as err `"estimand '`unknown'' not known; provide any combination of: `estimands'"'
         exit 198
     }
+
+    if ( `:list posof "_all" in estimand' ) {
+        if ( `:list sizeof estimand' > 1 ) {
+            disp as txt "warning: multiple estimands requested with estimand(_all)"
+        }
+        local estimand simple cohort calendar eventstudy
+    }
+    local estimand: list estimands & estimand
 
     local options skip_data_check eventTime num_fisher estimand beta use_last_treated_only drop_treated_beforet
     foreach opt of local options {
@@ -139,7 +149,6 @@ program Display, eclass
     else {
         ereturn post `b' `V', esample(`touse') obs(`N')
     }
-    mata `namelist'.events()
     mata `namelist'.results()
     ereturn local vcetype = proper("`vce'")
     ereturn local vce `vce'

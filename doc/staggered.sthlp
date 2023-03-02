@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.4.1 23Feb2023}{...}
+{* *! version 0.5.0 02Mar2023}{...}
 {viewerdialog staggered "dialog staggered"}{...}
 {vieweralsosee "[R] staggered" "mansection R staggered"}{...}
 {viewerjumpto "Syntax" "staggered##syntax"}{...}
@@ -39,7 +39,7 @@ xx
 {synopt :{opt i(varname)}} Individual{p_end}
 {synopt :{opt t(varname)}} Time{p_end}
 {synopt :{opt g(varname)}} Cohort{p_end}
-{synopt :{opt estimand(str)}} Estimand: simple, cohort, calendar, eventstudy.{p_end}
+{synopt :{opt estimand(str)}} Estimand; any combination of: simple, cohort, calendar, eventstudy.{p_end}
 {synopt :{opt eventTime(numlist)}} Event times for estimand eventstudy (default 0).{p_end}
 {synopt :{opt beta(real)}} User-input beta (to use instead of betastar).{p_end}
 {synopt :{opt num_fisher(int)}} Number of fisher permutations (default 0).{p_end}
@@ -79,6 +79,7 @@ xx
 {synoptset 23 tabbed}{...}
 {p2col 5 23 26 2: Scalars}{p_end}
 {synopt:{cmd:e(N)}}number of observations{p_end}
+{synopt:{cmd:e(fisher_supt_pval)}}fisher p-value from sup-t-statistic (only with num_fisher)){p_end}
 
 {p2col 5 23 26 2: Macros}{p_end}
 {synopt:{cmd:e(cmd)}}{cmd:staggered}{p_end}
@@ -96,13 +97,12 @@ xx
 {synopt:{cmd:e(b)}}coefficient of interest (theta){p_end}
 {synopt:{cmd:e(V)}}variance of theta{p_end}
 {synopt:{cmd:e(eventTime)}}event times (only with multiple eventTime values){p_end}
-{synopt:{cmd:e(thetastar)}}estimates (only with multiple eventTime values){p_end}
-{synopt:{cmd:e(se_neyman)}}neyman SEs (only with multiple eventTime values){p_end}
-{synopt:{cmd:e(se_adjusted)}}adjusted SEs (only with multiple eventTime values){p_end}
+{synopt:{cmd:e(thetastar)}}estimates (only with multiple estimates or eventTime values){p_end}
+{synopt:{cmd:e(se_neyman)}}neyman SEs (only with multiple estimates or eventTime values){p_end}
+{synopt:{cmd:e(se_adjusted)}}adjusted SEs (only with multiple estimates or eventTime values){p_end}
 {synopt:{cmd:e(Wald_test)}}Wald statistic (column 1) and p-value (column 2){p_end}
 {synopt:{cmd:e(fisher_neyman)}}neyman fisher p-value (only with num_fisher()){p_end}
 {synopt:{cmd:e(fisher_adjusted)}}adjusted fisher p-value (only with num_fisher)){p_end}
-{synopt:{cmd:e(fisher_supt_pval)}}fisher p-value from sup-t-statistic (only with num_fisher)){p_end}
 {synopt:{cmd:e(results)}}single matrix consolidating all results (estimate and SEs){p_end}
 
 {p2col 5 23 26 2: Functions}{p_end}
@@ -149,7 +149,10 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
         real colvector Xhat
             estimate of \hat{X}
 
-        real colvector V_X
+        real colvector Xhat_t
+            t-statistic, \hat{X} / diagonal(V_{\hat{X}})
+
+        real matrix V_X
             estimate of V_{\hat{X}} (variance of \hat{X})
 
         real colvector V_thetaX
@@ -159,10 +162,10 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
             estimate of V_{\hat{\theta}} (variance of \hat{\theta})
 
         real matrix A_theta
-            auxiliary matrix with rows containing A_{theta, g}
+            auxiliary matrix with rows containing A_{theta, g} (stacked for multiple estimates/event times)
 
         real matrix A_0
-            auxiliary matrix with rows containing A_{0, g}
+            auxiliary matrix with rows containing A_{0, g} (stacked for multiple estimates/event times)
 
         real colvector se_neyman
             estimate of 'neyman' SE
@@ -170,7 +173,7 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
         real colvector se_adjusted
             estimate of 'adjusted' SE
 
-        real matrix Wald_test
+        real rowvector Wald_test
             Wald statistic (column 1) and p-value (column 2)
 
         real colvector fisher_neyman
@@ -179,7 +182,7 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
         real colvector fisher_adjusted
             simulated 'adjusted' fisher p-value
 
-        real colvector fisher_supt_pval
+        real scalar fisher_supt_pval
             simulated sup-t-statistic fisher p-value
 
 {marker references}{...}

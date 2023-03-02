@@ -1,6 +1,7 @@
 * do src/install
 * exit, clear
 * stata14-mp
+* set more off
 
 * load the officer data
 use test/pj_officer_level_balanced.dta, clear
@@ -104,6 +105,39 @@ matlist e(results)
 *              | first_t~d  se_adju~d  se_neyman  fisher_~n  fisher_~d
 * -------------+-------------------------------------------------------
 *   complaints |  -.001127   .0021152   .0021192        .61        .61
+
+* Any combination of the aforementioned estimands and tests can be requested. For instance,
+staggered complaints, i(uid) t(period) g(first_trained) estimand(eventstudy simple) eventTime(0/4) num_fisher(500)
+
+* -------------------------------------------------------------------------------
+*               |              Adjusted
+*               |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+* --------------+----------------------------------------------------------------
+* simple        |
+* first_trained |   -.001127   .0021152    -0.53   0.594    -.0052727    .0030187
+* --------------+----------------------------------------------------------------
+* eventstudy    |
+* first_trained |
+*            0  |   .0003084   .0026453     0.12   0.907    -.0048764    .0054931
+*            1  |   .0025917   .0026146     0.99   0.322    -.0025328    .0077161
+*            2  |  -.0000487   .0026226    -0.02   0.985     -.005189    .0050916
+*            3  |   .0020434   .0027157     0.75   0.452    -.0032792    .0073661
+*            4  |   .0029771   .0026539     1.12   0.262    -.0022245    .0081787
+* -------------------------------------------------------------------------------
+
+matlist e(results)
+
+*              | first_t~d  se_adju~d  se_neyman  fisher_~n  fisher_~d 
+* -------------+-------------------------------------------------------
+* simple       |                                                       
+* first_trai~d |  -.001127   .0021152   .0021192        .61        .61 
+* -------------+-------------------------------------------------------
+* eventstudy   |                                                       
+* 0.first_tr~d |  .0003084   .0026453    .002651       .924       .924 
+* 1.first_tr~d |  .0025917   .0026146   .0026215       .358       .354 
+* 2.first_tr~d | -.0000487   .0026226   .0026236       .984       .984 
+* 3.first_tr~d |  .0020434   .0027157   .0027205       .432       .432 
+* 4.first_tr~d |  .0029771   .0026539   .0026596        .25        .25 
 
 * Calculate Callaway and Sant'Anna estimator for the simple weighted average
 staggered complaints, i(uid) t(period) g(first_trained) estimand(simple) cs
