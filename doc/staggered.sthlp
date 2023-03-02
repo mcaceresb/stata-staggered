@@ -102,6 +102,7 @@ xx
 {synopt:{cmd:e(Wald_test)}}Wald statistic (column 1) and p-value (column 2){p_end}
 {synopt:{cmd:e(fisher_neyman)}}neyman fisher p-value (only with num_fisher()){p_end}
 {synopt:{cmd:e(fisher_adjusted)}}adjusted fisher p-value (only with num_fisher)){p_end}
+{synopt:{cmd:e(fisher_supt_pval)}}fisher p-value from sup-t-statistic (only with num_fisher)){p_end}
 {synopt:{cmd:e(results)}}single matrix consolidating all results (estimate and SEs){p_end}
 
 {p2col 5 23 26 2: Functions}{p_end}
@@ -177,6 +178,9 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
 
         real colvector fisher_adjusted
             simulated 'adjusted' fisher p-value
+
+        real colvector fisher_supt_pval
+            simulated sup-t-statistic fisher p-value
 
 {marker references}{...}
 {title:References}

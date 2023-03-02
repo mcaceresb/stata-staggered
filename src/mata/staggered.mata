@@ -55,6 +55,7 @@ class Staggered
     real colvector se_adjusted
     real colvector fisher_adjusted
     real colvector fisher_neyman
+    real colvector fisher_supt_pval
     real matrix    Wald_test
 
     // functions
@@ -155,6 +156,7 @@ void function Staggered::estimate()
     this.var_neyman          = J(max((length(this.eventTime)\1))+this.anyfisher, 1, .)
     this.fisher_adjusted     = J(max((length(this.eventTime)\1)), 1, .)
     this.fisher_neyman       = J(max((length(this.eventTime)\1)), 1, .)
+    this.fisher_supt_pval    = J(max((length(this.eventTime)\1)), 1, .)
     this.Wald_test           = J(max((length(this.eventTime)\1))+this.anyfisher, 2, .)
 
     // If estimand is provided, calculate the appropriate A_theta_list
@@ -706,6 +708,7 @@ void function Staggered::compute_fisher(|real scalar index)
     real colvector _thetastar
     real colvector _se_adjusted
     real colvector _se_neyman
+    real colvector _Wald_stat
 
     if ( !this.anyfisher ) return
 
@@ -714,16 +717,19 @@ void function Staggered::compute_fisher(|real scalar index)
     _thetastar       = J(num_fisher, 1, .)
     _se_adjusted     = J(num_fisher, 1, .)
     _se_neyman       = J(num_fisher, 1, .)
+    _Wald_stat       = J(num_fisher, 1, .)
     for(i = 1; i <= num_fisher; i++) {
         this.permute_cohort(i)
         this.compute_estimand(dummy)
         _thetastar[i]      = this.thetastar[dummy]
         _se_adjusted[i]    = this.se_adjusted[dummy]
         _se_neyman[i]      = this.se_neyman[dummy]
+        _Wald_stat[i]      = this.Wald_test[dummy, 1]
     }
 
-    fisher_adjusted[index] = mean(abs(this.thetastar[index] / this.se_adjusted[index]) :< abs(_thetastar :/ _se_adjusted))
-    fisher_neyman[index]   = mean(abs(this.thetastar[index] / this.se_neyman[index])   :< abs(_thetastar :/ _se_neyman))
+    this.fisher_adjusted[index]  = mean(abs(this.thetastar[index] / this.se_adjusted[index]) :< abs(_thetastar :/ _se_adjusted))
+    this.fisher_neyman[index]    = mean(abs(this.thetastar[index] / this.se_neyman[index])   :< abs(_thetastar :/ _se_neyman))
+    this.fisher_supt_pval[index] = mean(this.Wald_test[index, 1] :< _Wald_stat)
 }
 
 // Shuffle outcome y; note it's the only thing we need to shuffle
@@ -836,6 +842,9 @@ void function Staggered::events()
 
             st_matrix("e(fisher_adjusted)", this.fisher_adjusted)
             st_matrixrowstripe("e(fisher_adjusted)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
+
+            st_matrix("e(fisher_supt_pval)", this.fisher_supt_pval)
+            st_matrixrowstripe("e(fisher_supt_pval)", (J(length(this.eventTime), 1, ""), strofreal(this.eventTime')))
         }
     }
     else {
@@ -844,8 +853,9 @@ void function Staggered::events()
         st_matrixrowstripe("e(Wald_test)", ("", "X-hat"))
 
         if ( this.anyfisher ) {
-            st_matrix("e(fisher_neyman)", this.fisher_neyman)
-            st_matrix("e(fisher_adjusted)", this.fisher_adjusted)
+            st_matrix("e(fisher_neyman)",    this.fisher_neyman)
+            st_matrix("e(fisher_adjusted)",  this.fisher_adjusted)
+            st_matrix("e(fisher_supt_pval)", this.fisher_supt_pval)
         }
     }
 }
