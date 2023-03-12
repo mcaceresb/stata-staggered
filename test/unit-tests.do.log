@@ -1,0 +1,129 @@
+
+  ___  ____  ____  ____  ____ (R)
+ /__    /   ____/   /   ____/
+___/   /   /___/   /   /___/   14.2   Copyright 1985-2015 StataCorp LLC
+  Statistics/Data Analysis            StataCorp
+                                      4905 Lakeway Drive
+     MP - Parallel Edition            College Station, Texas 77845 USA
+                                      800-STATA-PC        http://www.stata.com
+                                      979-696-4600        stata@stata.com
+                                      979-696-4601 (fax)
+
+18-user 8-core Stata network perpetual license:
+       Serial number:  501406201034
+         Licensed to:  National Bureau of Economic Research
+                       Cambridge, MA 02138
+
+Notes:
+      1.  Stata is running in batch mode.
+      2.  Unicode is supported; see help unicode_advice.
+      3.  More than 2 billion observations are allowed; see help obs_advice.
+      4.  Maximum number of variables is set to 5000; see help set_maxvar.
+
+
+running /home/mauricio/ado/personal/sysprofile.do ...
+
+
+running /home/mauricio/ado/profile.do ...
+
+. do test/unit-tests.do 
+
+. version 14.1
+
+. set seed 1729
+
+. qui do test/unit-tests-basic.do
+
+. qui do test/unit-compare.do
+
+. 
+. capture program drop main
+
+. program main
+  1.     qui stagtest_genbalanced 100 10
+  2.     unit_test: basic_checks
+  3. 
+.     qui stagtest_genasync 1000 10
+  4.     unit_test: basic_checks
+  5.     forvalues i = 0/3 {
+  6.         unit_test: basic_checks if mod(i, 4) == `i'
+  7.     }
+  8. 
+.     unit_test: stagtest_comparison
+  9.     unit_test: basic_failures
+ 10. end
+
+. 
+. capture program drop stagtest_genbalanced
+
+. program stagtest_genbalanced
+  1.     args ni nt offset
+  2.     if "`offset'" == "" local offset = 123
+  3.     clear
+  4.     set obs `nt'
+  5.     gen t = _n + `offset'
+  6.     expand `ni'
+  7.     bys t: gen i = _n
+  8.     gen g = `offset' + runiform() * `nt'
+  9.     sort i t, stable
+ 10.     by i (t): replace g = ceil(g[_N])
+ 11.     gen y = (t >= g) + rnormal() * 3
+ 12.     gen w = (t <= g) + rnormal() * 3
+ 13. end
+
+. 
+. capture program drop stagtest_genasync
+
+. program stagtest_genasync
+  1.     args ni nt offset
+  2.     if "`offset'" == "" local offset = 123
+  3.     clear
+  4.     set obs `ni'
+  5.     gen i = _n
+  6.     gen Nt = `nt' + ceil(runiform() * `nt')
+  7.     expand Nt
+  8.     bys i: gen t = _n + `offset'
+  9.     gen g = .
+ 10.     replace g = `offset' + runiform() * Nt / 2 + Nt/3 if mod(i, 4) == 0
+ 11.     replace g = `offset' + runiform() * Nt * 2 - Nt/2 if mod(i, 4) == 1
+ 12.     replace g = `offset' + runiform() * Nt     + Nt/2 if mod(i, 4) == 2
+ 13.     replace g = `offset' + runiform() * Nt     - Nt/2 if mod(i, 4) == 3
+ 14.     sort i t, stable
+ 15.     by i (t): replace g = ceil(g[_N])
+ 16.     * tab t g if mod(i, 4) == 0
+.     * tab t g if mod(i, 4) == 1
+.     * tab t g if mod(i, 4) == 2
+.     * tab t g if mod(i, 4) == 3
+.     gen y = (t >= g) + rnormal() * 3
+ 17.     gen w = (t <= g) + rnormal() * 3
+ 18. end
+
+. 
+. capture program drop unit_test
+
+. program unit_test
+  1.     _on_colon_parse `0'
+  2.     local 0 `r(before)'
+  3.     local cmd `s(after)'
+  4.     syntax, [NOIsily tab(int 4) *]
+  5.     cap `noisily' `cmd'
+  6.     if ( _rc ) {
+  7.         di as error _col(`=`tab'+1') `"test(failed): `cmd'"'
+  8.         exit _rc
+  9.     }
+ 10.     else di as txt _col(`=`tab'+1') `"test(passed): `cmd'"'
+ 11. end
+
+. 
+. main
+    test(passed): basic_checks
+    test(passed): basic_checks
+    test(passed): basic_checks if mod(i, 4) == 0
+    test(passed): basic_checks if mod(i, 4) == 1
+    test(passed): basic_checks if mod(i, 4) == 2
+    test(passed): basic_checks if mod(i, 4) == 3
+    test(passed): stagtest_comparison
+    test(passed): basic_failures
+
+. 
+end of do-file

@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.5.0 02Mar2023}{...}
+{* *! version 0.6.0 11Mar2023}{...}
 {viewerdialog staggered "dialog staggered"}{...}
 {vieweralsosee "[R] staggered" "mansection R staggered"}{...}
 {viewerjumpto "Syntax" "staggered##syntax"}{...}
@@ -16,7 +16,8 @@
 {title:Syntax}
 
 {pstd}
-Stata version of the Staggered R package, which implements xx.
+Stata version of the Staggered R package, which implements the efficient
+estimator for staggered rollout designs proposed by Roth and Sant'Anna (2023).
 
 {p 8 15 2}
 {cmd:staggered}
@@ -29,7 +30,10 @@ Stata version of the Staggered R package, which implements xx.
 [{it:{help staggered##table_options:options}}]
 
 {pstd}
-xx
+{opt i()} identifies each individual and can be of any type; however,
+{opt t()} and {opt g()} must both be numeric and have the same units,
+as they both indicate time periods. Further, at least one estimand must
+be requested (and multiple estimands are allowed).
 
 {synoptset 27 tabbed}{...}
 {marker table_options}{...}
@@ -38,7 +42,7 @@ xx
 {syntab :Options}
 {synopt :{opt i(varname)}} Individual{p_end}
 {synopt :{opt t(varname)}} Time{p_end}
-{synopt :{opt g(varname)}} Cohort{p_end}
+{synopt :{opt g(varname)}} Cohort (i.e.the time period the individual enters treatment).{p_end}
 {synopt :{opt estimand(str)}} Estimand; any combination of: simple, cohort, calendar, eventstudy.{p_end}
 {synopt :{opt eventTime(numlist)}} Event times for estimand eventstudy (default 0).{p_end}
 {synopt :{opt beta(real)}} User-input beta (to use instead of betastar).{p_end}
@@ -60,15 +64,14 @@ xx
 See the {browse "https://github.com/mcaceresb/stata-staggered#readme":online examples} for details or refer to the examples below.
 
 {marker example}{...}
-{title:Example 1: xx}
+{title:Example 1: Basic Usage}
 
-{pstd}
-xx
-
-{title:Example 2: xx}
-
-{pstd}
-xx
+{phang2}{cmd:. local github https://github.com/mcaceresb/stata-staggered }{p_end}
+{phang2}{cmd:. use `github'/raw/main/pj_officer_level_balanced.dta, clear}{p_end}
+{phang2}{cmd:.                                                           }{p_end}
+{phang2}{cmd:. local stagopts i(uid) t(period) g(first_trained)          }{p_end}
+{phang2}{cmd:. staggered complaints, `stagopts' estimand(simple)         }{p_end}
+{phang2}{cmd:. staggered complaints, `stagopts' estimand(eventstudy simple) eventTime(0/4) num_fisher(500)}{p_end}
 
 {marker results}{...}
 {title:Stored results}
@@ -133,9 +136,6 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
 
         real colvector cohort_size
             vector of cohort sizes (as used internally in the estimation)
-
-        real scalar preperiods
-            number of pre-periods (i.e. before first cohort treated)
 
         real scalar num_fisher
             number of fisher permutations

@@ -1,0 +1,243 @@
+running
+  '/usr/lib/R/bin/R --no-echo --no-restore --no-save --no-restore --file=test/unit-compare.R'
+
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+Warning messages:
+1: In staggered_cs(df = df, i = "i", t = "t", g = "g", y = "y", estimand = "simple") :
+  Dropping units who were treated in the first period or earlier, since CS estimator is not defined (and ATT(t,g) not identified under parallel trends).
+2: In staggered_cs(df = df, i = "i", t = "t", g = "g", y = "y", estimand = "eventstudy",  :
+  Dropping units who were treated in the first period or earlier, since CS estimator is not defined (and ATT(t,g) not identified under parallel trends).
+3: In staggered_sa(df = df, i = "i", t = "t", g = "g", y = "y", estimand = "simple") :
+  Dropping units who were treated in the first period or earlier, since SA estimator is not defined (and ATT(t,g) not identified under parallel trends).
+4: In staggered_sa(df = df, i = "i", t = "t", g = "g", y = "y", estimand = "eventstudy",  :
+  Dropping units who were treated in the first period or earlier, since SA estimator is not defined (and ATT(t,g) not identified under parallel trends).
+There were 30 warnings (use warnings() to see them)
+There were 50 or more warnings (use warnings() to see the first 50)
+       estimate  se se_neyman
+  [1,]        1   1         1
+  [2,]        1   1         1
+  [3,]        1   1         1
+  [4,]        1   1         1
+  [5,]        1   1         1
+  [6,]      NaN NaN       NaN
+  [7,]        1   1         1
+  [8,]        1   1         1
+  [9,]        1   1         1
+ [10,]        1   1         1
+ [11,]        1   1         1
+ [12,]        1   1         1
+ [13,]        1   1         1
+ [14,]        1   1         1
+ [15,]        1   1         1
+ [16,]      NaN NaN       NaN
+ [17,]        1   1         1
+ [18,]        1   1         1
+ [19,]        1   1         1
+ [20,]        1   1         1
+ [21,]        1   1         1
+ [22,]        1   1         1
+ [23,]        1   1         1
+ [24,]      NaN NaN       NaN
+ [25,]        1   1         1
+ [26,]        1   1         1
+ [27,]        1   1         1
+ [28,]        1   1         1
+ [29,]        1   1         1
+ [30,]        1   1         1
+ [31,]        1   1         1
+ [32,]      NaN NaN       NaN
+ [33,]        1   1         1
+ [34,]        1   1         1
+ [35,]        1   1         1
+ [36,]        1   1         1
+ [37,]        1   1         1
+ [38,]        1   1         1
+ [39,]        1   1         1
+ [40,]        1   1         1
+ [41,]        1   1         1
+ [42,]      NaN NaN       NaN
+ [43,]        1   1         1
+ [44,]        1   1         1
+ [45,]        1   1         1
+ [46,]        1   1         1
+ [47,]        1   1         1
+ [48,]        1   1         1
+ [49,]        1   1         1
+ [50,]        1   1         1
+ [51,]        1   1         1
+ [52,]      NaN NaN       NaN
+ [53,]        1   1         1
+ [54,]        1   1         1
+ [55,]        1   1         1
+ [56,]        1   1         1
+ [57,]        1   1         1
+ [58,]        1   1         1
+ [59,]        1   1         1
+ [60,]      NaN NaN       NaN
+ [61,]        1   1         1
+ [62,]        1   1         1
+ [63,]        1   1         1
+ [64,]        1   1         1
+ [65,]        1   1         1
+ [66,]        1   1         1
+ [67,]        1   1         1
+ [68,]      NaN NaN       NaN
+ [69,]        1   1         1
+ [70,]        1   1         1
+ [71,]        1   1         1
+ [72,]        1   1         1
+ [73,]        1   1         1
+ [74,]        1   1         1
+ [75,]        1   1         1
+ [76,]        1   1         1
+ [77,]        1   1         1
+ [78,]      NaN NaN       NaN
+ [79,]        1   1         1
+ [80,]        1   1         1
+ [81,]        1   1         1
+ [82,]        1   1         1
+ [83,]        1   1         1
+ [84,]        1   1         1
+ [85,]        1   1         1
+ [86,]        1   1         1
+ [87,]        1   1         1
+ [88,]      NaN NaN       NaN
+ [89,]        1   1         1
+ [90,]        1   1         1
+ [91,]        1 NaN         1
+ [92,]        1   1         1
+ [93,]        1   1         1
+ [94,]        1   1         1
+ [95,]        1   1         1
+ [96,]      NaN NaN       NaN
+ [97,]        1   1         1
+ [98,]        1   1         1
+ [99,]        1   1         1
+[100,]        1   1         1
+[101,]        1   1         1
+[102,]        1   1         1
+[103,]        1   1         1
+[104,]      NaN NaN       NaN
+[105,]        1   1         1
+[106,]        1   1         1
+[107,]        1   1         1
+[108,]        1   1         1
+[109,]        1   1         1
+[110,]        1   1         1
+[111,]        1   1         1
+[112,]        1   1         1
+[113,]        1   1         1
+[114,]      NaN NaN       NaN
+[115,]        1   1         1
+[116,]        1   1         1
+[117,]        1   1         1
+[118,]        1   1         1
+[119,]        1   1         1
+[120,]        1   1         1
+[121,]        1   1         1
+[122,]        1   1         1
+[123,]        1   1         1
+[124,]      NaN NaN       NaN
+[125,]        1   1         1
+[126,]        1   1         1
+[127,]        1   1         1
+[128,]        1   1         1
+[129,]        1   1         1
+[130,]        1   1         1
+[131,]        1   1         1
+[132,]      NaN NaN       NaN
+[133,]        1   1         1
+[134,]        1   1         1
+[135,]        1   1         1
+[136,]        1   1         1
+[137,]        1   1         1
+[138,]        1   1         1
+[139,]        1   1         1
+[140,]      NaN NaN       NaN
+[141,]        1   1         1
+[142,]        1   1         1
+[143,]        1   1         1
+[144,]        1   1         1
+[145,]        1   1         1
+[146,]        1   1         1
+[147,]        1   1         1
+[148,]        1   1         1
+[149,]        1   1         1
+[150,]      NaN NaN       NaN
+[151,]        1   1         1
+[152,]        1   1         1
+[153,]        1   1         1
+[154,]        1   1         1
+[155,]        1   1         1
+[156,]        1   1         1
+[157,]        1   1         1
+[158,]        1   1         1
+[159,]        1   1         1
+[160,]      NaN NaN       NaN
+[161,]        1   1         1
+[162,]        1   1         1
+[163,]        1   1         1
+[164,]        1   1         1
+[165,]        1   1         1
+[166,]        1   1         1
+[167,]        1   1         1
+[168,]      NaN NaN       NaN
+[169,]        1   1         1
+[170,]        1   1         1
+[171,]        1   1         1
+[172,]        1   1         1
+[173,]        1   1         1
+[174,]        1   1         1
+[175,]        1   1         1
+[176,]      NaN NaN       NaN
+[177,]        1   1         1
+[178,]        1   1         1
+[179,]        1   1         1
+[180,]        1   1         1
+[181,]        1   1         1
+[182,]        1   1         1
+[183,]        1   1         1
+[184,]        1   1         1
+[185,]        1   1         1
+[186,]      NaN NaN       NaN
+[187,]        1   1         1
+[188,]        1   1         1
+[189,]        1   1         1
+[190,]        1   1         1
+[191,]        1   1         1
+[192,]        1   1         1
+[193,]        1   1         1
+[194,]        1   1         1
+[195,]        1 NaN         1
+[196,]      NaN NaN       NaN
+[197,]        1   1         1
+[198,]        1   1         1
+[199,]        1   1         1
+[200,]        1   1         1
+[201,]        1   1         1
+[202,]        1   1         1
+[203,]        1   1         1
+[204,]      NaN NaN       NaN
+[205,]        1   1         1
+[206,]        1   1         1
+[207,]        1   1         1
+[208,]        1   1         1
+[209,]        1   1         1
+[210,]        1   1         1
+[211,]        1 NaN         1
+[212,]      NaN NaN       NaN
+[213,]        1 NaN         1
+[214,]        1   1         1
+[215,]        1   1         1
+[216,]        1   1         1
+[1] TRUE

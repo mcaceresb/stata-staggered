@@ -1,6 +1,7 @@
 cap mata mata drop StaggeredNew()
 cap mata mata drop Staggered()
 // map ,,p mm<A-a>:s/this\.//g<CR>`m
+// map ,,p mm<A-a>:s/this\./`Staggered'./g<CR>`m
 
 mata:
 class Staggered
@@ -22,7 +23,6 @@ class Staggered
     real scalar    Ni
     real scalar    Nt
     real scalar    Ng
-    real scalar    preperiods
     real scalar    nestimands
     real scalar    multiest
     real scalar    multievent
@@ -126,10 +126,9 @@ void function Staggered::init(string vector _varlist, string scalar _touse)
     this.varlist = _varlist
     this.touse   = _touse
 
-    this.setup_encode_i(vars[1])            // reads i
+    this.setup_encode_i(vars[1], vars[4])   // reads i, y
     this.setup_balance_df(vars[2], vars[3]) // reads t, g
-    this.setup_flag_singletons()
-    this.y = st_data(., vars[4], this.touse)[this.index]
+    this.setup_flag_singletons(vars[3])
 
     if ( length(this.eventTime) ) {
         this.setup_eventstudy()
@@ -146,6 +145,16 @@ void function Staggered::init(string vector _varlist, string scalar _touse)
     this.cohorts    = this.g[this.cohort_info[., 1]]
     this.A_theta    = J(0, this.Nt, .)
     this.A_0        = J(0, this.Nt, .)
+
+    if ( length(this.user_beta) & (length(this.user_beta) != this.nestimands) ) {
+        if ( length(this.user_beta) == 1 ) {
+            this.user_beta = J(this.nestimands, 1, this.user_beta)
+        }
+        else {
+            errprintf("beta() must be either be a scalar or the same length as the number of estimands requested\n")
+            _error(198)
+        }
+    }
 }
 
 void function Staggered::estimate()
@@ -231,28 +240,29 @@ void function Staggered::check_caller()
     }
 }
 
-void function Staggered::setup_encode_i(string scalar var)
+void function Staggered::setup_encode_i(string scalar ivar, string scalar yvar)
 {
     string colvector svar
     real colvector rvar
 
-    if ( strpos(st_vartype(var), "str") ) {
-        svar       = st_sdata(., var, this.touse)
+    if ( strpos(st_vartype(ivar), "str") ) {
+        svar       = st_sdata(., ivar, this.touse)
         this.N     = length(svar)
         this.index = order(svar, 1)
         this.info  = panelsetup(svar[this.index], 1)
     }
     else {
-        rvar       = st_data(., var, this.touse)
+        rvar       = st_data(., ivar, this.touse)
         this.N     = length(rvar)
         this.index = order(rvar, 1)
         this.info  = panelsetup(rvar[this.index], 1)
     }
-    this.i = J(this.N, 1, 0)
+    this.i   = J(this.N, 1, 0)
     this.i[this.info[., 1]] = J(rows(this.info), 1, 1)
-    this.Ni = rows(this.info)
-    this.i  = runningsum(this.i)
+    this.Ni  = rows(this.info)
+    this.i   = runningsum(this.i)
     this.sel = J(this.N, 1, 1)
+    this.y   = st_data(., yvar, this.touse)[this.index]
 }
 
 //// This function creates a balanced panel as needed for our analysis
@@ -265,21 +275,28 @@ void function Staggered::setup_encode_i(string scalar var)
 // (i.e. force a balanced panel)
 void function Staggered::setup_balance_df(string scalar tvar, string scalar gvar)
 {
-    real scalar j
-    real colvector numPeriods, dropPeriods, cohort_ord
+    real scalar j, minmaxt
+    real colvector numPeriods, dropPeriods
     real rowvector sub
 
     this.t      = st_data(., tvar, this.touse)[this.index]
     this.g      = st_data(., gvar, this.touse)[this.index]
-    cohort_ord  = order((this.g, this.i, this.t), (1, 2, 3))
-    this.index  = this.index[cohort_ord]
-    this.i      = this.i[cohort_ord]
-    this.t      = this.t[cohort_ord]
-    this.g      = this.g[cohort_ord]
+    this.index  = order((this.g, this.i, this.t), (1, 2, 3))
+    this.i      = this.i[this.index]
+    this.t      = this.t[this.index]
+    this.g      = this.g[this.index]
+    this.y      = this.y[this.index]
+    minmaxt     = minmax(this.t)
 
+    this.info   = panelsetup(this.i, 1)
     numPeriods  = this.info[., 2] :- this.info[., 1] :+ 1
-    this.Nt     = max(numPeriods)
+    this.Nt     = minmaxt[2] - minmaxt[1] + 1
     dropPeriods = selectindex(numPeriods :< this.Nt)
+
+    if ( this.Ni != rows(this.info) ) {
+        errprintf("One or more individuals belong to multiple cohorts\n")
+        _error(198)
+    }
 
     if ( this.Nt < 2 ) {
         errprintf("All individuals appear in only one period; aborting\n")
@@ -290,27 +307,30 @@ void function Staggered::setup_balance_df(string scalar tvar, string scalar gvar
 
     // Ensure balanced panel
     if ( length(dropPeriods) ) {
+        for(j = 1; j <= length(dropPeriods); j++) {
+            sub = this.info[dropPeriods[j], .]'
+            this.sel[|sub|] = J(sub[2] - sub[1] + 1, 1, 0)
+        }
+        this.update_selection(" after balancing panel")
+    }
+
+    // This only works because (i, t) is sorted and each i has 2+ periods
+    if ( any(this.t[|2 \ this.N|] :== this.t[|1 \ this.N-1|]) | any(numPeriods :> this.Nt) ) {
+        errprintf("There are multiple observations with the same (i,t) values\n")
+        errprintf("The panel should have a unique outcome for each (i, t) value\n")
+        _error(459)
+    }
+
+    if ( length(dropPeriods) ) {
         errprintf("\nPanel is unbalanced (or has missing values) for some observations. Will")
         errprintf("\ndrop observations with missing values of Y_{it} for any time periods. If")
         errprintf("\nyou wish to include these observations, provide staggered with a balanced")
         errprintf("\ndata set with imputed outcomes.")
         errprintf("\n\n")
-
-        for(j = 1; j <= length(dropPeriods); j++) {
-            sub = this.info[dropPeriods[j], .]'
-            this.sel[|sub|] = J(sub[2] - sub[1] + 1, 1, 0)
-        }
-        this.update_selection()
-    }
-
-    // This only works because (i, t) is sorted and each i has 2+ periods
-    if ( any(this.t[|2 \ this.N|] :== this.t[|1 \ this.N-1|]) ) {
-        errprintf("The panel should have a unique outcome for each (i, t) value\n")
-        _error(459)
     }
 }
 
-void function Staggered::setup_flag_singletons()
+void function Staggered::setup_flag_singletons(string scalar gvar)
 {
     real scalar j
     real colvector flag_singleton
@@ -327,28 +347,29 @@ void function Staggered::setup_flag_singletons()
     // Drop cohorts which are singleton
     if ( length(flag_singleton) ) {
         if ( length(flag_singleton) > 1 ) {
-            gfmt = strtrim(sprintf(st_varformat(g), this.g[this.cohort_info[flag_singleton[1], 1]]))
-            errprintf("Treatment cohort g = %s has a single cross-sectional unit. We drop this cohort.\n", gfmt)
-        }
-        else {
             errprintf("Treatment cohorts found with a single cross-sectional unit. We drop these cohorts.\n")
             for(j = 1; j <= length(flag_singleton); j++) {
-                gfmt = sprintf(st_varformat(g), this.g[this.cohort_info[flag_singleton[j], 1]])
+                gfmt = sprintf(st_varformat(gvar), this.g[this.cohort_info[flag_singleton[j], 1]])
                 errprintf("\tg = %s\n", gfmt)
             }
+        }
+        else {
+            gfmt = strtrim(sprintf(st_varformat(gvar), this.g[this.cohort_info[flag_singleton[1], 1]]))
+            errprintf("Treatment cohort g = %s has a single cross-sectional unit. We drop this cohort.\n", gfmt)
         }
 
         this.sel = J(this.N, 1, 1)
         for(j = 1; j <= length(flag_singleton); j++) {
-            sub = cohort_info[flag_singleton[j], .]'
+            sub = this.cohort_info[flag_singleton[j], .]'
             this.sel[|sub|] = J(sub[2] - sub[1] + 1, 1, 0)
         }
-        update_selection()
+        this.update_selection(" after dropping singleton cohorts")
     }
 }
 
-void function Staggered::update_selection()
+void function Staggered::update_selection(| string scalar msg)
 {
+    if ( args() < 1 ) msg = ""
     real colvector keep
     if ( this.sel == . ) return
     if ( all(this.sel) ) return
@@ -356,23 +377,25 @@ void function Staggered::update_selection()
     keep = selectindex(this.sel)
     this.N = length(keep)
     if ( this.N ) {
-        if ( this.touse != "" ) st_store(., this.touse, this.sel)
         if ( this.i     != .  ) this.i     = this.i[keep]
         if ( this.t     != .  ) this.t     = this.t[keep]
         if ( this.y     != .  ) this.y     = this.y[keep]
-        if ( this.index != .  ) this.index = this.index[keep]
         if ( this.info  != .  ) this.info  = panelsetup(this.i, 1)
         if ( this.info  != .  ) this.Ni    = rows(this.info)
+        if ( (this.touse != "") & (this.index != .) ) {
+            st_store(., this.touse, this.touse, this.sel[order(this.index, 1)])
+            this.index = this.index[keep]
+        }
         if ( this.g     != .  ) {
             this.g           = this.g[keep]
             this.cohort_info = panelsetup(this.g, 1)
             this.Ng          = rows(this.cohort_info)
             this.cohort_size = (this.cohort_info[., 2] :- this.cohort_info[., 1] :+ 1) :/ this.Nt
         }
-        this.sel = J(N, 1, 1)
+        this.sel = J(this.N, 1, 1)
     }
     else {
-        errprintf("no observations")
+        errprintf("no observations%s; halting execution\n", sprintf(msg))
         _error(2000)
     }
 }
@@ -394,10 +417,9 @@ void function Staggered::compute_Ag_simple()
     t_all  = this.t[1::this.Nt]
     t_sel  = selectindex((min(g_all)  :<= t_all) :& (t_all :< max(g_all)))
     t_list = t_all[t_sel]
-    g_sel  = selectindex((min(t_list) :<= g_all) :& (g_all :< max(g_all)))
+    g_sel  = selectindex(g_all :<= max(t_all))
     g_list = g_all[g_sel]
     g_max  = max(g_all)
-    this.preperiods = sum(t_all :< min(g_all))
 
     // It's easier to expain the A_theta matrix in terms of a loop for g, t pairs
     //
@@ -440,7 +462,9 @@ void function Staggered::compute_Ag_simple()
     for(i = 1; i <= length(g_list); i++) {
         g_map = selectindex(t_all :== (g_list[i]-1))
         i_sel = selectindex(t_all :>= g_list[i])
-        A_0_w[i_sel, g_map] = J(length(i_sel), 1, this.cohort_size[i])
+        if ( length(g_map) & length(i_sel) ) {
+            A_0_w[i_sel, g_map] = J(length(i_sel), 1, this.cohort_size[i])
+        }
     }
 
     for(i = 1; i <= length(t_list); i++) {
@@ -451,7 +475,9 @@ void function Staggered::compute_Ag_simple()
     A_0 = - A_0 * A_0_w
     for(i = 1; i <= length(g_list); i++) {
         g_map = selectindex(t_all :== (g_list[i]-1))
-        A_0[i, g_map] = sum(t_all :> g_list[i]) * this.cohort_size[i]
+        if ( length(g_map) ) {
+            A_0[i, g_map] = sum((t_all :>= g_list[i]) :& (t_all :< max(g_all))) * this.cohort_size[i]
+        }
     }
     A_0 = A_0 :/ N_total
 
@@ -481,7 +507,6 @@ void function Staggered::compute_Ag_cohort()
     g_sel  = selectindex((g_all :< max(g_all)) :& (g_all :<= max(t_all)))
     g_list = g_all[g_sel]
     g_max  = max(g_all)
-    this.preperiods = sum(t_all :< min(g_all))
 
     // A_theta; scaling changes a decent amount but overall similar
     // TODO: xx explain loop and mapping to weighting here
@@ -509,7 +534,9 @@ void function Staggered::compute_Ag_cohort()
     for(i = 1; i <= length(g_list); i++) {
         g_map = selectindex(t_all :== (g_list[i]-1))
         i_sel = selectindex(t_all :>= g_list[i])
-        A_0_w[i_sel, g_map] = J(length(i_sel), 1, this.cohort_size[i] / g_scale[i])
+        if ( length(g_map) & length(i_sel) ) {
+            A_0_w[i_sel, g_map] = J(length(i_sel), 1, this.cohort_size[i] / g_scale[i])
+        }
     }
 
     for(i = 1; i <= length(t_list); i++) {
@@ -520,7 +547,9 @@ void function Staggered::compute_Ag_cohort()
     A_0 = - A_0 * A_0_w
     for(i = 1; i <= length(g_list); i++) {
         g_map = selectindex(t_all :== (g_list[i]-1))
-        A_0[i, g_map] = sum(t_all :> g_list[i]) * this.cohort_size[i] / g_scale[i]
+        if ( length(g_map) ) {
+            A_0[i, g_map] = sum((t_all :>= g_list[i]) :& (t_all :< max(g_all))) * this.cohort_size[i] / g_scale[i]
+        }
     }
     A_0 = A_0 :/ N_total
 
@@ -535,7 +564,7 @@ void function Staggered::compute_Ag_calendar()
     real colvector g_list, t_list
     real colvector i_sel, i_inv, g_wgt, Ng_control
 
-    real rowvector g_map
+    real rowvector g_map, g_cnt
     real scalar i, g_max
     real matrix A_0_w, A_theta, A_0
 
@@ -543,44 +572,82 @@ void function Staggered::compute_Ag_calendar()
     t_all  = this.t[1::this.Nt]
     t_sel  = selectindex((min(g_all) :<= t_all) :& (t_all :< max(g_all)))
     t_list = t_all[t_sel]
-    g_sel  = selectindex(g_all :<= max(t_sel))
+    g_sel  = selectindex(g_all :<= max(t_list))
     g_list = g_all[g_sel]
     g_max  = max(g_all)
-    this.preperiods = sum(t_all :< min(g_all))
 
     // A_theta; scaling changes a decent amount but overall similar
     // TODO: xx explain loop and mapping to weighting here
     A_theta = J(this.Ng, this.Nt, 0)
-    Ng_control = sum(this.cohort_size) :- runningsum(this.cohort_size)
+    Ng_control = sum(this.cohort_size) :- (0 \ (this.Ng-1? runningsum(this.cohort_size)[1..(this.Ng-1)]: J(0, 1, 0)))
     for(i = 1; i <= length(t_list); i++) {
         i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
         i_inv = selectindex(g_all :<= t_list[i])
         g_wgt = this.cohort_size[i_inv] :/ sum(this.cohort_size[i_inv])
-        A_theta[i_sel, t_sel[i]] = - J(1, length(g_wgt), this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]) * g_wgt
+        A_theta[i_sel, t_sel[i]] = - J(1, length(g_wgt), this.cohort_size[i_sel] :/ Ng_control[i_sel[1]]) * g_wgt
         A_theta[i_inv, t_sel[i]] = g_wgt
     }
     A_theta = A_theta :/ length(t_list)
 
-    // A_0; same idea but  scaling changes a _lot_, actually
-    // TODO: xx explain loop and mapping to weighting here
+    // A_0; same idea but scaling changes a _lot_, actually
+    // 1. For each t: (t >= min g) and (t < max g) (scale by sum_t 1)
+    // 2. For each g <= t (scale by N_g / sum_g N_g)
+    //     - t' is the position in the time vector equal to g - 1
+    //     - for each g' > t, add N_g' / sum N_g' to g', t'
+    //     - add 1 to g, t'
+    // 3. For each g <= t (scale by N_g / sum_g N_g)
+    //
+    // Think of the G x T matrix A_0
+    // - Since t is fixed within each t and across g, this basically
+    //   creates the same vector from min g: g > t through max g: g <= max t
+    //   equal to N_g / sum N_g
+    // - The point are the weights. Here I first create an intermediate G x T
+    //   matrix; the t-th column has this vector in the requisite position.
+    // - It should be the case that only the columns where t equals some
+    //   g-1 are populated. For each such column t', we need to sum all
+    //   the columns of the intermediate matrix if t' is smaller than
+    //   some t. For example,
+    //     - t = 1 to 5
+    //     - g = 2 to 5
+    //     - if t = 3; we add the vector in the t-th column of the intermediate
+    //       matrix to columns 1, 2 (g-1) of the final output matrix
+    //     - if t = 4; we add the vector in the t-th column of the intermediate
+    //       matrix to columns 1, 2, 3 (g-1) of the final output matrix
+    //     - In general, the t'-th coumn of the output matrix will be the sum
+    //       of all t columns of the intermediate matrix if t = g-1 and t > t'
+    // - The final sticking point is scaling, since each column of the intermediate
+    //   matrix is scaled differently depending on the output. In particular,
+    //   even though the base vector from the intermediary matix is the same,
+    //   each is by sum_g: g <= t N_g and multiplied by N_g. Hence we have a
+    //   weighting matrix where each row is a vector N_g / sum_g N_g. The result
+    //   is the intermedie matrix times this vector.
+    // - The last piece of the puzzle is the 1 at g, t', but we can just sum
+    //   the adequate rows of the weighting  matrix to get it!
+
     A_0   = J(this.Ng, this.Nt, 0)
     A_0_w = J(this.Nt, this.Nt, 0)
     g_map = J(1,       this.Ng, 0)
     for(i = 1; i <= length(g_list); i++) {
-        g_map[i] = selectindex(t_all :== (g_list[i]-1))
+        i_sel = selectindex(t_all :== (g_list[i]-1))
+        if ( length(i_sel) ) {
+            g_map[i] = i_sel
+        }
     }
     for(i = 1; i <= length(t_all); i++) {
         i_sel = selectindex(g_list :<= t_all[i])
-        A_0_w[i, g_map[i_sel]] = this.cohort_size[g_sel[i_sel]]' / sum(this.cohort_size[g_sel[i_sel]])
+        g_cnt = this.cohort_size[g_sel[i_sel]]' / sum(this.cohort_size[g_sel[i_sel]])
+        i_sel = selectindex(g_map[i_sel] :!= 0)
+        A_0_w[i, g_map[i_sel]] = g_cnt[i_sel]
     }
     for(i = 1; i <= length(t_list); i++) {
         i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
-        A_0[i_sel, t_sel[i]] = this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]
+        A_0[i_sel, t_sel[i]] = this.cohort_size[i_sel] :/ Ng_control[i_sel[1]]
     }
-
     A_0 = - A_0 * A_0_w
     for(i = 1; i <= length(g_list); i++) {
-        A_0[i, g_map[i]] = sum(A_0_w[t_sel[selectindex(t_list :> g_map[i])], g_map[i]])
+        if ( g_map[i] ) {
+            A_0[i, g_map[i]] = sum(A_0_w[t_sel[selectindex(t_list :> g_map[i])], g_map[i]])
+        }
     }
     A_0 = A_0 :/ length(t_list)
 
@@ -609,48 +676,63 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
     g_list = g_all[g_sel]
     t_list = g_list :+ event
     g_max  = max(g_all)
-    this.preperiods = sum(t_all :< min(g_all))
 
     t_sel = J(1, length(t_list), 0)
     x_map = J(1, length(t_list), 0)
     for(i = 1; i <= length(t_list); i++) {
-        t_sel[i] = selectindex(t_all :== t_list[i])
-        x_map[i] = selectindex((g_all :+ event) :== t_list[i])
+        i_sel = selectindex(t_all :== t_list[i])
+        if ( length(i_sel) ) {
+            t_sel[i] = selectindex(t_all :== t_list[i])
+        }
+        i_sel = selectindex((g_all :+ event) :== t_list[i])
+        if ( length(i_sel) ) {
+            x_map[i] = i_sel
+        }
     }
 
     // A_theta
     // TODO: xx explain loop and mapping to weighting here
-    N_total = sum(this.cohort_size[g_sel])
-    A_theta = J(this.Ng, this.Nt, 0)
-    Ng_control = sum(this.cohort_size) :- runningsum(this.cohort_size)
+    N_total    = sum(this.cohort_size[g_sel])
+    A_theta    = J(this.Ng, this.Nt, 0)
+    Ng_control = sum(this.cohort_size) :- (0 \ (this.Ng-1? runningsum(this.cohort_size)[1..(this.Ng-1)]: J(0, 1, 0)))
     for(i = 1; i <= length(t_list); i++) {
         i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
         i_inv = selectindex(g_all :<= g_list[i])
-        A_theta[i_sel, t_sel[i]] = - this.cohort_size[x_map[i]] :* this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]
-        A_theta[i_inv[length(i_inv)], t_sel[i]] = this.cohort_size[x_map[i]]
+        if ( t_sel[i] ) {
+            A_theta[i_sel, t_sel[i]] = - this.cohort_size[x_map[i]] :* this.cohort_size[i_sel] :/ Ng_control[i_sel[1]]
+            A_theta[i_inv[length(i_inv)], t_sel[i]] = A_theta[i_inv[length(i_inv)], t_sel[i]] + this.cohort_size[x_map[i]]
+        }
     }
     A_theta = A_theta :/ N_total
 
     // A_0
-    // TODO: xx explain loop and mapping to weighting here
-    A_0   = J(this.Ng, this.Nt, 0)
+    // 1. The eligible cohorts (g_list) are all s.t.
+    //     - g': g' + event < min max g, t
+    // 2. For each eligible g', in the G x T matrix A_0
+    //     - t' is the position in the time vector equal to g' - 1
+    //     - Add 1 to the g', t' column
+    //     - for each g'': g'' > g' + event
+    //         - Add - N_g'' / sum_g'' N_g'' to g'', t'
+    // 3. Scale each row by g' / sum N_g'
     A_0_w = J(this.Nt, this.Nt, 0)
+    A_0   = J(this.Ng, this.Nt, 0)
     for(i = 1; i <= length(g_list); i++) {
         g_map = selectindex(t_all :== (g_list[i]-1))
-        i_sel = selectindex(t_all :== (g_list[i]+event))
-        A_0_w[i_sel, g_map] = this.cohort_size[x_map[i]]
+        if ( length(g_map) ) {
+            A_0_w[g_map, g_map] = this.cohort_size[x_map[i]]
+        }
     }
     for(i = 1; i <= length(t_list); i++) {
-        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
-        A_0[i_sel, t_sel[i]] = this.cohort_size[i_sel] :/ Ng_control[i_sel[1]-1]
-    }
-    A_0 = - A_0 * A_0_w
-    for(i = 1; i <= length(g_list); i++) {
         g_map = selectindex(t_all :== (g_list[i]-1))
-        i_inv = selectindex(g_all :<= g_list[i])
-        A_0[i_inv[length(i_inv)], g_map] = this.cohort_size[x_map[i]]
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
+        if ( length(g_map) & length(i_sel) ) {
+            A_0[i_sel, g_map] = - this.cohort_size[i_sel] :/ Ng_control[i_sel[1]]
+        }
+        if ( length(g_map) & x_map[i] ) {
+            A_0[x_map[i], g_map] = A_0[x_map[i], g_map] + 1
+        }
     }
-    A_0 = A_0 :/ N_total
+    A_0 = A_0 * A_0_w / N_total
 
     this.A_0     = this.A_0     \ A_0
     this.A_theta = this.A_theta \ A_theta
@@ -660,10 +742,12 @@ void function Staggered::compute_estimand(|real scalar offset)
 {
     if ( args() < 1 ) offset = 0
 
-    real scalar i
-    real colvector preindex, betahat, sel1, sel2, selecti
+    real scalar i, j, t_min, npreperiods
+    real colvector g_all, g_zero, g_min, g_minsel, preperiods, preindex
+    real rowvector t_all, g_sel, g_zerosel, g_ng
+    real colvector betahat, sel1, sel2, selecti
     real colvector Y_sum
-    real matrix Y_g, S_g, S_preperiod, A0_g, At_g
+    real matrix M, Y_g, S_g, S_g1, S_g2, S_g3, S_preperiod, A0_g, At_g
 
     // R translation notes
     //     varhat_conservative <-> var_neyman
@@ -691,18 +775,51 @@ void function Staggered::compute_estimand(|real scalar offset)
     // - S_\theta is defined but I haven't invested time into parsing it out;
     //   I also got it from the code and I'm 90% sure it's the adjustmentFactor
 
-    sel1     = offset + 1
-    sel2     = offset + this.nestimands
-    selecti  = this.Ng :* (0::(this.nestimands-1))
-    preindex = 1::this.preperiods
+    selecti = this.Ng :* (0::(this.nestimands-1))
+    g_all   = this.g[this.cohort_info[., 1]]
+    t_all   = this.t[1::this.Nt]'
+    t_min   = min(t_all)
+    g_sel   = selectindex(colmax(abs(this.A_theta)) :> 0)
+    g_sel   = length(g_sel)? g_sel[1]: 1
+    g_min   = J(this.nestimands, 1, g_all[1])
+    g_zero  = rowmax(abs(this.A_theta)) :== 0
+    if ( any(g_zero) ) {
+        for(i = 1; i <= this.nestimands; i++) {
+            sel1 = this.Ng * (i - 1) + 1
+            sel2 = this.Ng * i
+            if ( all(g_zero[|sel1 \ sel2|]) ) {
+                errprintf("No eligible cohorts with non-zero weight\n")
+                _error(198)
+            }
+            else if ( any(g_zero[|sel1 \ sel2|]) ) {
+                g_min[i] = g_all[min(selectindex(!g_zero[|sel1 \ sel2|]))]
+            }
+        }
+    }
+    preperiods  = rowsum(t_all :< J(1, this.Nt, g_min))
+    preindex    = selectindex(preperiods)
+    npreperiods = length(preindex)
+    g_ng = npreperiods? colsum(g_min[preindex]' :<= J(1, npreperiods, g_all)): 0
+    M    = J(sum(preperiods), this.Nt * npreperiods, 0)
+    sel1 = 1
+    sel2 = 0
+    for(i = 1; i <= this.nestimands; i++) {
+        if ( preperiods[i] ) {
+            M[|(sel1, sel2+1)\(sel1+preperiods[i]-1, sel2+preperiods[i])|] = I(preperiods[i])
+            sel1 = sel1 + preperiods[i]
+            sel2 = sel2 + this.Nt
+        }
+    }
+    sel1 = offset + 1
+    sel2 = offset + this.nestimands
 
     this.V_X      [|(sel1,1)\(sel2,.)|] = J(this.nestimands, this.nestimands, 0)
     this.V_thetaX [|(sel1,1)\(sel2,.)|] = J(this.nestimands, this.nestimands, 0)
     this.V_theta  [|(sel1,1)\(sel2,.)|] = J(this.nestimands, this.nestimands, 0)
     this.thetahat0[|(sel1,1)\(sel2,.)|] = J(this.nestimands, 1, 0)
     this.Xhat     [|(sel1,1)\(sel2,.)|] = J(this.nestimands, 1, 0)
-    betahat                      = J(this.preperiods, this.nestimands, 0)
-    S_preperiod                  = J(this.preperiods, this.preperiods, 0)
+    betahat     = npreperiods? J(sum(preperiods), this.nestimands, 0): J(1, this.nestimands, 0)
+    S_preperiod = npreperiods? J(sum(preperiods), sum(preperiods), 0): 0
     for(i = 1; i <= this.Ng; i++) {
         Y_g   = colshape(panelsubmatrix(this.y, i, this.cohort_info), this.Nt)
         S_g   = variance(Y_g)
@@ -716,14 +833,24 @@ void function Staggered::compute_estimand(|real scalar offset)
         this.thetahat0[|(sel1,1)\(sel2,.)|] = this.thetahat0[|(sel1,1)\(sel2,.)|] + At_g * Y_sum / this.cohort_size[i]
         this.Xhat     [|(sel1,1)\(sel2,.)|] = this.Xhat     [|(sel1,1)\(sel2,.)|] + A0_g * Y_sum / this.cohort_size[i]
 
-        betahat     = betahat :+ pinv(S_g[preindex, preindex]) * S_g[preindex, .] * At_g'
-        S_preperiod = S_preperiod + S_g[preindex, preindex]
+        if ( npreperiods ) {
+            S_g1 = M * (I(npreperiods)#S_g)
+            S_g2 = S_g1 * M'
+            S_g3 = I(0)
+            g_zerosel = (g_min[preindex] :<= g_all[i])'
+            betahat[.,preindex] = betahat[.,preindex] :+ ((pinv(S_g2) * S_g1) * (I(npreperiods)#J(this.Nt, 1, 1) :* J(npreperiods, 1, At_g[preindex,.]')) :* g_zerosel)
+            for(j = 1; j <= npreperiods; j++) {
+                S_g3 = blockdiag(S_g3, I(preperiods[preindex[j]]) * g_zerosel[j] / g_ng[j])
+            }
+            S_preperiod = S_preperiod + S_g2 * S_g3
+        }
     }
-    this.V_X      [|(sel1,1)\(sel2,.)|] = makesymmetric(this.V_X      [|(sel1,1)\(sel2,.)|])
+
+    this.V_X      [|(sel1,1)\(sel2,.)|] = makesymmetric(this.V_X [|(sel1,1)\(sel2,.)|])
     this.V_thetaX [|(sel1,1)\(sel2,1)|] = diagonal(this.V_thetaX [|(sel1,1)\(sel2,.)|])
     this.V_theta  [|(sel1,1)\(sel2,1)|] = diagonal(this.V_theta  [|(sel1,1)\(sel2,.)|])
 
-    this.adjustmentFactor[|(sel1,1)\(sel2,.)|] = diagonal(betahat' * (S_preperiod / this.Ng) * betahat) / sum(this.cohort_size)
+    this.adjustmentFactor[|(sel1,1)\(sel2,.)|] = diagonal(betahat' * S_preperiod * betahat) / sum(this.cohort_size)
     this.betastar        [|(sel1,1)\(sel2,.)|] = all(this.user_beta :!= .)? colshape(this.user_beta, 1): (invsym(diag(this.V_X[|(sel1,1)\(sel2,.)|])) * this.V_thetaX[|(sel1,1)\(sel2,1)|])
     this.thetastar       [|(sel1,1)\(sel2,.)|] = this.thetahat0[|(sel1,1)\(sel2,.)|] - this.betastar[|(sel1,1)\(sel2,.)|] :* this.Xhat[|(sel1,1)\(sel2,.)|]
     this.var_neyman      [|(sel1,1)\(sel2,.)|] = this.V_theta[|(sel1,1)\(sel2,1)|] +
@@ -738,7 +865,7 @@ void function Staggered::compute_estimand(|real scalar offset)
     this.Wald_test[1+(offset>0), 2] = chi2tail(this.nestimands, this.Wald_test[1, 1])
 
     if ( any((this.se_neyman[|(sel1,1)\(sel2,.)|] \ this.se_adjusted[|(sel1,1)\(sel2,.)|]) :== 0) ) {
-        errprintf("Calculated variance is less than 0. Setting SE to 0.\n")
+        errprintf("Some estimated variances < 0; setting to 0 as applicable.\n")
     }
 }
 

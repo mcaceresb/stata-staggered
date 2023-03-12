@@ -1,4 +1,4 @@
-*! version 0.5.0 02Mar2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
+*! version 0.6.0 11Mar2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
 *! staggered R to Stata translation
 
 capture program drop staggered
@@ -48,6 +48,7 @@ program staggered, eclass
     }
 
     local estimand = trim(lower(`"`estimand'"'))
+    local estimand: list uniq estimand
     local vce      = trim(lower(`"`vce'"'))
 
     if "`vce'" == "" local vce adjusted
@@ -101,7 +102,15 @@ program staggered, eclass
     * Drop units with g =< min(t); for cs and sa, ATT(t,g) is not identified for these units
     if ( "`drop_treated_beforet'" != "" ) {
         qui sum `t', meanonly
-        qui replace `touse' = 0 if `g' <= r(min)
+        local min = r(min)
+        qui count  if `g' <= `min'
+        if ( `r(N)' ) {
+            disp as txt "Dropping units who were treated in the first period or earlier."
+            if ( "`cs'`sa'" != "" ) {
+                disp as txt `"Otherwise `=upper("`cs'`sa'")' estimator is not defined (and ATT(t,g) not identified under parallel trends)."'
+            }
+        }
+        qui replace `touse' = 0 if `g' <= `min'
     }
 
     local StagOpt_Caller staggered
@@ -139,7 +148,6 @@ program Display, eclass
         disp as err "vce() option `vce' not known; defaulting to 'adjusted'"
     }
 
-    mata printf("\nStaggered Treatment Effect Estimate\n")
     FreeMatrix b V
     mata `namelist'.post("`b'", "`V'", "`vce'")
     mata st_local("N", strofreal(`namelist'.N))
@@ -152,6 +160,8 @@ program Display, eclass
     mata `namelist'.results()
     ereturn local vcetype = proper("`vce'")
     ereturn local vce `vce'
+    _coef_table_header, nomodeltest title(Staggered Treatment Effect Estimate)
+    disp ""
     _coef_table, noempty `options'
     //     level(95)
     //     bmatrix(`b')      // e(b)
