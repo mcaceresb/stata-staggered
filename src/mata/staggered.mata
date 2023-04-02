@@ -39,6 +39,7 @@ class Staggered
     real scalar    skip_data_check
     real scalar    use_last_treated_only
     real scalar    drop_treated_beforet
+    real scalar    return_full_vcv
 
     // results
     real matrix    A_theta
@@ -56,6 +57,9 @@ class Staggered
     real colvector se_neyman
     real colvector var_adjusted
     real colvector se_adjusted
+    real matrix    full_neyman
+    real matrix    full_adjusted
+
     real colvector fisher_adjusted
     real colvector fisher_neyman
     real scalar    fisher_supt_pval
@@ -102,6 +106,7 @@ void function Staggered::new()
     this.skip_data_check       = (st_local("StagOpt_skip_data_check")       != "")
     this.use_last_treated_only = (st_local("StagOpt_use_last_treated_only") != "")
     this.drop_treated_beforet  = (st_local("StagOpt_drop_treated_beforet")  != "")
+    this.return_full_vcv       = (st_local("StagOpt_return_full_vcv")       != "")
 }
 
 void function Staggered::clear()
@@ -137,14 +142,16 @@ void function Staggered::init(string vector _varlist, string scalar _touse)
         this.eventTime = 0
     }
 
-    this.multiest   = length(this.estimand)  > 1
-    this.multievent = length(this.eventTime) > 1
-    this.nestimands = length(this.estimand) :+ ((length(this.eventTime)-1) * any(this.estimand :== "eventstudy"))
-    this.anyfisher  = this.num_fisher>0
-    this.times      = this.t[1::this.Nt]
-    this.cohorts    = this.g[this.cohort_info[., 1]]
-    this.A_theta    = J(0, this.Nt, .)
-    this.A_0        = J(0, this.Nt, .)
+    this.multiest      = length(this.estimand)  > 1
+    this.multievent    = length(this.eventTime) > 1
+    this.nestimands    = length(this.estimand) :+ ((length(this.eventTime)-1) * any(this.estimand :== "eventstudy"))
+    this.anyfisher     = this.num_fisher>0
+    this.times         = this.t[1::this.Nt]
+    this.cohorts       = this.g[this.cohort_info[., 1]]
+    this.A_theta       = J(0, this.Nt, .)
+    this.A_0           = J(0, this.Nt, .)
+    this.full_neyman   = J(this.return_full_vcv * this.nestimands, this.return_full_vcv * this.return_full_vcv * this.nestimands, 0)
+    this.full_adjusted = full_neyman
 
     if ( length(this.user_beta) & (length(this.user_beta) != this.nestimands) ) {
         if ( length(this.user_beta) == 1 ) {
@@ -747,7 +754,7 @@ void function Staggered::compute_estimand(|real scalar offset)
     real rowvector t_all, g_sel, g_zerosel, g_ng
     real colvector betahat, sel1, sel2, selecti
     real colvector Y_sum
-    real matrix M, Y_g, S_g, S_g1, S_g2, S_g3, S_preperiod, A0_g, At_g
+    real matrix M, Y_g, S_g, S_g1, S_g2, S_g3, S_preperiod, A0_g, At_g, Ac_g
 
     // R translation notes
     //     varhat_conservative <-> var_neyman
@@ -867,6 +874,23 @@ void function Staggered::compute_estimand(|real scalar offset)
     if ( any((this.se_neyman[|(sel1,1)\(sel2,.)|] \ this.se_adjusted[|(sel1,1)\(sel2,.)|]) :== 0) ) {
         errprintf("Some estimated variances < 0; setting to 0 as applicable.\n")
     }
+
+    // TODO: xx there's a possible issue here if g_min varies by
+    // estimand, or without pre-periods
+    if ( this.return_full_vcv ) {
+        for(i = 1; i <= Ng; i++) {
+            Y_g  = colshape(panelsubmatrix(y, i, cohort_info), Nt)
+            S_g  = variance(Y_g)
+            A0_g = A_0[selecti :+ i, .]
+            At_g = A_theta[selecti :+ i, .]
+            Ac_g = At_g :- this.betastar[|(sel1,1)\(sel2,.)|] :* A0_g
+            this.full_neyman = this.full_neyman + (Ac_g * S_g * Ac_g') / cohort_size[i]
+        }
+        M           = J(npreperiods, 1, 1)#I(min(preperiods))
+        betahat     = M' * betahat
+        S_preperiod = S_preperiod[|1, 1 \ min(preperiods), min(preperiods)|]
+        this.full_adjusted = this.full_neyman - betahat' * S_preperiod * betahat / sum(cohort_size)
+    }
 }
 
 // Randomly permute the treatmnet timing (cohort) at the individual level
@@ -878,7 +902,7 @@ void function Staggered::compute_estimand(|real scalar offset)
 // is permuted, but everything else is static.
 void function Staggered::compute_fisher()
 {
-    real scalar sel1, sel2
+    real scalar sel1, sel2, cached_vcv
     real matrix _thetastar
     real matrix _se_adjusted
     real matrix _se_neyman
@@ -887,10 +911,13 @@ void function Staggered::compute_fisher()
     if ( !this.anyfisher ) return
 
     sel1 = this.nestimands+1; sel2 = this.nestimands*2
-    _thetastar       = J(num_fisher, this.nestimands, .)
-    _se_adjusted     = J(num_fisher, this.nestimands, .)
-    _se_neyman       = J(num_fisher, this.nestimands, .)
-    _t_stat          = J(num_fisher, this.nestimands, .)
+    _thetastar   = J(num_fisher, this.nestimands, .)
+    _se_adjusted = J(num_fisher, this.nestimands, .)
+    _se_neyman   = J(num_fisher, this.nestimands, .)
+    _t_stat      = J(num_fisher, this.nestimands, .)
+
+    cached_vcv = this.return_full_vcv
+    this.return_full_vcv = 0
     for(i = 1; i <= num_fisher; i++) {
         this.permute_cohort(i)
         this.compute_estimand(this.nestimands)
@@ -899,6 +926,7 @@ void function Staggered::compute_fisher()
         _se_neyman[i,.]   = this.se_neyman[|(sel1,1)\(sel2,.)|]'
         _t_stat[i,.]      = this.Xhat_t[|(sel1,1)\(sel2,.)|]'
     }
+    this.return_full_vcv = cached_vcv
 
     sel1 = 1; sel2 = this.nestimands
     this.fisher_adjusted  = mean(abs(this.thetastar :/ this.se_adjusted)[|(sel1,1)\(sel2,.)|]' :< abs(_thetastar :/ _se_adjusted))'
@@ -968,17 +996,23 @@ void function Staggered::post(string scalar b, string scalar V,| string scalar v
         }
     }
 
-    if ( this.nestimands > 1 ) {
-        printf("(warning: e(V) is a diagonal matrix of SEs, not a full vcov matrix)\n")
-    }
-
     st_matrix(b, rowshape(this.thetastar, 1))
     st_matrixcolstripe(b, (eqnames, rownames))
     st_matrixrowstripe(b, ("", tokens(this.varlist)[4]))
 
-    st_matrix(V, vce == "neyman"? diag(this.var_neyman): diag(this.var_adjusted))
-    st_matrixcolstripe(V, (eqnames, rownames))
-    st_matrixrowstripe(V, (eqnames, rownames))
+    if ( this.return_full_vcv ) {
+        st_matrix(V, vce == "neyman"? this.full_neyman: this.full_adjusted)
+        st_matrixcolstripe(V, (eqnames, rownames))
+        st_matrixrowstripe(V, (eqnames, rownames))
+    }
+    else {
+        if ( this.nestimands > 1 ) {
+            printf("(warning: e(V) is a diagonal matrix of SEs, not a full vcov matrix)\n")
+        }
+        st_matrix(V, vce == "neyman"? diag(this.var_neyman): diag(this.var_adjusted))
+        st_matrixcolstripe(V, (eqnames, rownames))
+        st_matrixrowstripe(V, (eqnames, rownames))
+    }
 }
 
 void function Staggered::results()

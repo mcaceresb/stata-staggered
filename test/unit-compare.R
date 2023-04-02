@@ -6,7 +6,6 @@
 # remove.packages("staggered")
 # install.packages(".", repos=NULL, type="source")
 
-library(dplyr)
 library(haven)
 library(staggered)
 sel <- c("estimate", "se", "se_neyman")
@@ -42,7 +41,7 @@ df <- read_dta('/tmp/tmpb.dta')
     )
 
 for (m in 0:3) {
-    df <- read_dta('/tmp/tmpb.dta') %>% filter(i %% 4 == m)
+    df <- subset(read_dta('/tmp/tmpb.dta'), i %% 4 == m)
         resb <- rbind(
             resb,
             staggered(df = df, i = "i", t = "t", g = "g", y = "y", estimand = "simple")[,sel],
@@ -75,5 +74,6 @@ for (m in 0:3) {
     return(mat)
 }
 M <- as.matrix(.roundeps(rbind(resa, resb)) / .roundeps(.loadmat("/tmp/tmp.bin")))
+cbind(.roundeps(rbind(resa, resb)), .roundeps(.loadmat("/tmp/tmp.bin")))
 M
 all(na.omit(((c(M)-1) < 1e-12) | (abs(c(M)) == Inf)))

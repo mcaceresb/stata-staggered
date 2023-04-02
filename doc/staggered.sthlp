@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.6.0 11Mar2023}{...}
+{* *! version 0.7.0 01Apr2023}{...}
 {viewerdialog staggered "dialog staggered"}{...}
 {vieweralsosee "[R] staggered" "mansection R staggered"}{...}
 {viewerjumpto "Syntax" "staggered##syntax"}{...}
@@ -48,6 +48,7 @@ be requested (and multiple estimands are allowed).
 {synopt :{opt beta(real)}} User-input beta (to use instead of betastar).{p_end}
 {synopt :{opt num_fisher(int)}} Number of fisher permutations (default 0).{p_end}
 {synopt :{opt skip_data_check}} Do not balance data (warning: data must already be balanced).{p_end}
+{synopt :{opt return_full_vcv}} Return full vcov matrix (for event study estimands).{p_end}
 {synopt :{opt drop_treated_beforet}} Drop cohorts treated (weakly) before first time period.{p_end}
 {synopt :{opt use_last_treated_only}} Only use last treated cohort as treatment.{p_end}
 {synopt :{opt vce(str)}} Either 'neyman' or 'adjusted' (default){p_end}
@@ -98,7 +99,7 @@ See the {browse "https://github.com/mcaceresb/stata-staggered#readme":online exa
 
 {p2col 5 23 26 2: Matrices}{p_end}
 {synopt:{cmd:e(b)}}coefficient of interest (theta){p_end}
-{synopt:{cmd:e(V)}}variance of theta{p_end}
+{synopt:{cmd:e(V)}}variance of theta (diagonal matrix unless {cmd:return_full_vcv} is requested){p_end}
 {synopt:{cmd:e(eventTime)}}event times (only with multiple eventTime values){p_end}
 {synopt:{cmd:e(thetastar)}}estimates (only with multiple estimates or eventTime values){p_end}
 {synopt:{cmd:e(se_neyman)}}neyman SEs (only with multiple estimates or eventTime values){p_end}
@@ -172,6 +173,12 @@ The following data are available in {cmd:e(mata)} (default name: StaggeredResult
 
         real colvector se_adjusted
             estimate of 'adjusted' SE
+
+        real matrix full_neyman
+            estimate of 'neyman' vcov (only with return_full_vcv)
+
+        real matrix full_adjusted
+            estimate of 'adjusted' vcov (only with return_full_vcv)
 
         real rowvector Wald_test
             Wald statistic (column 1) and p-value (column 2)

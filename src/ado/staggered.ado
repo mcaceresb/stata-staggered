@@ -1,4 +1,4 @@
-*! version 0.6.0 11Mar2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
+*! version 0.7.0 01Apr2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
 *! staggered R to Stata translation
 
 capture program drop staggered
@@ -24,6 +24,7 @@ program staggered, eclass
            skip_data_check                  /// do not check if data balanced
            drop_treated_beforet             /// drop all cohorts treated before first time period
            use_last_treated_only            /// only use last cohort as control
+           return_full_vcv                  /// return full vcov matrix (for event study estimands)
            `options'                        ///
     ]
 
@@ -72,7 +73,7 @@ program staggered, eclass
     }
     local estimand: list estimands & estimand
 
-    local options skip_data_check eventTime num_fisher estimand beta use_last_treated_only drop_treated_beforet
+    local options skip_data_check eventTime num_fisher estimand beta use_last_treated_only drop_treated_beforet return_full_vcv
     foreach opt of local options {
         local StagOpt_`opt': copy local `opt'
     }

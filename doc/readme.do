@@ -2,6 +2,7 @@
 * exit, clear
 * stata14-mp
 * set more off
+* set rmsg on
 
 * load the officer data
 use test/pj_officer_level_balanced.dta, clear
