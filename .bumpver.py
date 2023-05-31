@@ -40,6 +40,7 @@ config_files = [
 config_standalone = {
     'staggered': [
         'src/build/lstaggered.mlib',
+        'src/mata//staggered.mata',
         'src/ado/staggered.ado',
         'doc/staggered.sthlp'
     ]
