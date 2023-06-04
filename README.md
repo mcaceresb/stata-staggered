@@ -48,7 +48,7 @@ procedural justice training on different dates.
 
 ```stata
 * load the officer data
-use https://github.com/mcaceresb/stata-staggered/raw/main/pj_officer_level_balanced.dta, clear
+use https://github.com/mcaceresb/stata-staggered/raw/main/test/pj_officer_level_balanced.dta, clear
 ```
 
 ### Simple aggregate parameters

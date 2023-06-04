@@ -1,3 +1,4 @@
 standalone
+src/releases
 test/testing*
 test/pj_officer_level_balanced.dta
