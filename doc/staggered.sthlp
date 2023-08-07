@@ -52,7 +52,7 @@ be requested (and multiple estimands are allowed).
 {synopt :{opt drop_treated_beforet}} Drop cohorts treated (weakly) before first time period.{p_end}
 {synopt :{opt use_last_treated_only}} Only use last treated cohort as treatment.{p_end}
 {synopt :{opt vce(str)}} Either 'neyman' or 'adjusted' (default){p_end}
-{synopt :{opt sa}} Callaway and Sant'Anna estimator (alias for beta(1) drop_treated_beforet).{p_end}
+{synopt :{opt cs}} Callaway and Sant'Anna estimator (alias for beta(1) drop_treated_beforet).{p_end}
 {synopt :{opt sa}} Sun and Abraham estimator (alias for beta(1) drop_treated_beforet use_last_treated_only).{p_end}
 
 {p2colreset}{...}
