@@ -68,7 +68,7 @@ See the {browse "https://github.com/mcaceresb/stata-staggered#readme":online exa
 {title:Example 1: Basic Usage}
 
 {phang2}{cmd:. local github https://github.com/mcaceresb/stata-staggered }{p_end}
-{phang2}{cmd:. use `github'/raw/main/pj_officer_level_balanced.dta, clear}{p_end}
+{phang2}{cmd:. use `github'/raw/main/test/pj_officer_level_balanced.dta, clear}{p_end}
 {phang2}{cmd:.                                                           }{p_end}
 {phang2}{cmd:. local stagopts i(uid) t(period) g(first_trained)          }{p_end}
 {phang2}{cmd:. staggered complaints, `stagopts' estimand(simple)         }{p_end}
