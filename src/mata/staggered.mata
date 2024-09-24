@@ -703,7 +703,7 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
     A_theta    = J(this.Ng, this.Nt, 0)
     Ng_control = sum(this.cohort_size) :- (0 \ (this.Ng-1? runningsum(this.cohort_size)[1..(this.Ng-1)]: J(0, 1, 0)))
     for(i = 1; i <= length(t_list); i++) {
-        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> max((g_list[i], t_list[i])))
         i_inv = selectindex(g_all :<= g_list[i])
         if ( t_sel[i] ) {
             A_theta[i_sel, t_sel[i]] = - this.cohort_size[x_map[i]] :* this.cohort_size[i_sel] :/ Ng_control[i_sel[1]]
@@ -731,7 +731,7 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
     }
     for(i = 1; i <= length(t_list); i++) {
         g_map = selectindex(t_all :== (g_list[i]-1))
-        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> max((g_list[i], t_list[i])))
         if ( length(g_map) & length(i_sel) ) {
             A_0[i_sel, g_map] = - this.cohort_size[i_sel] :/ Ng_control[i_sel[1]]
         }

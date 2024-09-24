@@ -1,4 +1,4 @@
-*! version 0.7.0 01Apr2023 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
+*! version 0.7.1 24Sep2024 Mauricio Caceres Bravo, mauricio.caceres.bravo@gmail.com
 *! staggered R to Stata translation
 
 capture program drop staggered

@@ -1,0 +1,7 @@
+library("staggered")
+library("haven")
+df <- read_dta("df.dta")
+staggered(df = df, i = "i", t = "t", g = "g", y = "y", estimand = "simple")
+staggered(df = df, i = "i", t = "t", g = "g", y = "y", estimand = "cohort")
+staggered(df = df, i = "i", t = "t", g = "g", y = "y", estimand = "calendar")
+staggered(df = df, i = "i", t = "t", g = "g", y = "y", estimand = "eventstudy", eventTime=-15:9)
