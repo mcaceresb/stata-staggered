@@ -73,7 +73,11 @@ for (m in 0:3) {
     flush(con)
     return(mat)
 }
+
 M <- as.matrix(.roundeps(rbind(resa, resb)) / .roundeps(.loadmat("/tmp/tmp.bin")))
+N <- as.matrix(.roundeps(.loadmat("/tmp/tmp.bin")) / .roundeps(rbind(resa, resb)))
 cbind(.roundeps(rbind(resa, resb)), .roundeps(.loadmat("/tmp/tmp.bin")))
 M
 all(na.omit(((c(M)-1) < 1e-12) | (abs(c(M)) == Inf)))
+all(is.nan(M) == is.nan(N))
+max(abs(M - N), na.rm=T)

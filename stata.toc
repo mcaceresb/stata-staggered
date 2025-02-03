@@ -1,2 +1,2 @@
-v 0.7.1
+v 0.8.0
 p 'STAGGERED': Staggered

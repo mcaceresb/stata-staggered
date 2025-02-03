@@ -653,7 +653,7 @@ void function Staggered::compute_Ag_calendar()
     A_0 = - A_0 * A_0_w
     for(i = 1; i <= length(g_list); i++) {
         if ( g_map[i] ) {
-            A_0[i, g_map[i]] = sum(A_0_w[t_sel[selectindex(t_list :> g_map[i])], g_map[i]])
+            A_0[i, g_map[i]] = sum(A_0_w[t_sel[selectindex(t_list :>= g_list[i])], g_map[i]])
         }
     }
     A_0 = A_0 :/ length(t_list)
@@ -674,7 +674,7 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
 
     g_all  = this.g[this.cohort_info[., 1]]
     t_all  = this.t[1::this.Nt]
-    g_sel  = selectindex(((g_all :+ event) :< max(g_all)) :& ((g_all :+ event) :<= max(t_all)))
+    g_sel  = selectindex(((g_all :+ max((0, event))) :< max(g_all)) :& ((g_all :+ max((0, event))) :<= max(t_all)))
     if( length(g_sel) == 0 ){
         errprintf("There are no comparison cohorts for the given eventTime (%g)\n", event)
         _error(198)
@@ -698,7 +698,14 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
     }
 
     // TODO: Explain loop and mapping to weighting here
-    // TODO: Explain; you added max((g_list[i], t_list[i])) to mimic R's pmax(g, t), so placebo doesn't include own cohort in control
+    // TODO: You added max((g_list[i], t_list[i])) to mimic R's pmax(g, t), so placebo doesn't include own cohort in control
+    // TODO: NB: Why did you not add pmax(t, g) to every function and only EventStudy? Because
+    // 
+    // - Calendar:   Only g <= t are passed, so pmax(t, g) = t by construction
+    // - Cohort:     Only t >= g are passed, so pmax(t, g) = t by construction
+    // - Simple:     Only t, g pairs s.t. t >= g are passed, so pmax(t, g) = t by construction
+    // - EventStudy: Needed and added here
+
     N_total    = sum(this.cohort_size[g_sel])
     A_theta    = J(this.Ng, this.Nt, 0)
     Ng_control = sum(this.cohort_size) :- (0 \ (this.Ng-1? runningsum(this.cohort_size)[1..(this.Ng-1)]: J(0, 1, 0)))
@@ -734,7 +741,7 @@ void function Staggered::compute_Ag_eventstudy(real scalar event)
 
     for(i = 1; i <= length(t_list); i++) {
         g_map = selectindex(t_all :== (g_list[i]-1))
-        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> t_list[i])
+        i_sel = this.use_last_treated_only? selectindex((g_all :> t_list[i]) :& (g_all :== g_max)): selectindex(g_all :> max((g_list[i], t_list[i])))
         if ( length(g_map) & length(i_sel) ) {
             A_0[i_sel, g_map] = - this.cohort_size[i_sel] :/ Ng_control[i_sel[1]]
         }

@@ -1,7 +1,7 @@
 Staggered
 =========
 
-`version 0.7.1 24Sep2024` | [Background](#background) | [Installation](#installation) | [Examples](#examples)
+`version 0.8.0 02Feb2025` | [Background](#background) | [Installation](#installation) | [Examples](#examples)
 
 ## Background
 

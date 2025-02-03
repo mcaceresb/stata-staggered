@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.7.1 24Sep2024}{...}
+{* *! version 0.8.0 02Feb2025}{...}
 {viewerdialog staggered "dialog staggered"}{...}
 {vieweralsosee "[R] staggered" "mansection R staggered"}{...}
 {viewerjumpto "Syntax" "staggered##syntax"}{...}

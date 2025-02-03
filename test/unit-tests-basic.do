@@ -14,9 +14,9 @@ program basic_checks
             staggered y `if' `in', i(i) t(t) g(g) estimand(`est') eventTime(2/4)
             staggered y `if' `in', i(i) t(t) g(g) estimand(`est') eventTime(-2)
             staggered w `if' `in', i(i) t(t) g(g) estimand(`est') eventTime(0/4)   num_fisher(100)
-            staggered w `if' `in', i(i) t(t) g(g) estimand(`est') eventTime(-3/-1) num_fisher(100)
+            staggered w `if' `in', i(i) t(t) g(g) estimand(`est') eventTime(-2/-1) num_fisher(100)
             staggered y `if' `in', i(i) t(t) g(g) estimand(`est') eventTime(-2 2)
-            staggered w `if' `in', i(i) t(t) g(g) estimand(`est') eventTime(-3/4)  num_fisher(100)
+            staggered w `if' `in', i(i) t(t) g(g) estimand(`est') eventTime(-2/4)  num_fisher(100)
         }
         staggered w `if' `in', i(i) t(t) g(g) estimand(`est') num_fisher(100)
         staggered w `if' `in', i(i) t(t) g(g) estimand(`est') cs num_fisher(100)
